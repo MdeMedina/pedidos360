@@ -1,0 +1,129 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>Catálogo</h1>
+      <p class="muted">
+        @if (canWrite()) {
+          Alta, edición y control de stock de los productos.
+        } @else {
+          Vista de consulta. La edición del catálogo está reservada al rol Admin.
+        }
+      </p>
+    </div>
+    <div class="btn-row">
+      <button class="ghost" (click)="toggleInactive()">
+        {{ showInactive() ? 'Ver solo activos' : 'Incluir inactivos' }}
+      </button>
+      <button class="ghost" (click)="load()" [disabled]="loading()">Actualizar</button>
+      @if (canWrite()) {
+        <button class="primary" (click)="startCreate()">Nuevo producto</button>
+      }
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+  @if (info()) {
+    <div class="alert alert-ok">{{ info() }}</div>
+  }
+  @if (lowStock().length) {
+    <div class="alert alert-info">
+      {{ lowStock().length }} producto(s) con stock bajo (≤ 10 unidades). Recuerda que el stock
+      se descuenta en el momento en que un pedido pasa a <strong>ACCEPTED</strong>.
+    </div>
+  }
+
+  @if (showForm() && canWrite()) {
+    <div class="card" style="margin-bottom: 1rem">
+      <div class="card-head">
+        <h2>{{ editing() ? 'Editar producto' : 'Nuevo producto' }}</h2>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="sku">SKU</label>
+          <input id="sku" [value]="form().sku" (input)="patch('sku', $any($event.target).value)" />
+        </div>
+        <div class="field">
+          <label for="name">Nombre</label>
+          <input id="name" [value]="form().name" (input)="patch('name', $any($event.target).value)" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="desc">Descripción</label>
+        <input id="desc" [value]="form().description ?? ''"
+               (input)="patch('description', $any($event.target).value)" />
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="price">Precio</label>
+          <input id="price" type="number" min="0" [value]="form().price"
+                 (input)="patch('price', +$any($event.target).value)" />
+        </div>
+        <div class="field">
+          <label for="stock">Stock</label>
+          <input id="stock" type="number" min="0" [value]="form().stock"
+                 (input)="patch('stock', +$any($event.target).value)" />
+        </div>
+        <div class="field">
+          <label for="active">Estado</label>
+          <select id="active" [value]="form().active ? 'true' : 'false'"
+                  (change)="patch('active', $any($event.target).value === 'true')">
+            <option value="true">Activo</option>
+            <option value="false">Inactivo</option>
+          </select>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="primary" (click)="save()" [disabled]="busy()">Guardar</button>
+        <button class="ghost" (click)="showForm.set(false)">Cancelar</button>
+      </div>
+    </div>
+  }
+
+  @if (loading()) {
+    <p class="muted"><span class="spinner"></span> Cargando catálogo…</p>
+  } @else if (products().length === 0) {
+    <div class="empty">No hay productos cargados todavía.</div>
+  } @else {
+    <div class="grid grid-3">
+      @for (product of products(); track product.id) {
+        <div class="card product" [class.inactive]="!product.active">
+          <div class="product-head">
+            <div>
+              <strong>{{ product.name }}</strong>
+              <div class="mono faint">{{ product.sku }}</div>
+            </div>
+            <span class="price">{{ product.price | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</span>
+          </div>
+
+          <p class="muted">{{ product.description || 'Sin descripción' }}</p>
+
+          <div class="product-foot">
+            <span class="badge" [class.badge-DELIVERED]="product.stock > 10"
+                  [class.badge-PREPARING]="product.stock <= 10 && product.stock > 0"
+                  [class.badge-CANCELLED]="product.stock === 0">
+              Stock: {{ product.stock }}
+            </span>
+            @if (!product.active) {
+              <span class="badge badge-CANCELLED">Inactivo</span>
+            }
+          </div>
+
+          <div class="faint">Actualizado {{ product.updatedAt | date: 'dd/MM HH:mm' }}</div>
+
+          @if (canWrite()) {
+            <div class="btn-row" style="margin-top: 0.6rem">
+              <button class="sm" (click)="startEdit(product)">Editar</button>
+              @if (product.active) {
+                <button class="danger sm" (click)="deactivate(product)" [disabled]="busy()">
+                  Desactivar
+                </button>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

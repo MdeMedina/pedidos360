@@ -1,0 +1,27 @@
+.product {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.product.inactive { opacity: 0.6; }
+
+.product-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.price {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.product-foot {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}

@@ -1,0 +1,52 @@
+@if (!auth.ready()) {
+  <div class="boot">
+    <span class="spinner"></span>
+    <p class="muted">Resolviendo la sesión…</p>
+  </div>
+} @else if (showShell()) {
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">P360</span>
+        <div>
+          <strong>Pedidos360</strong>
+          <div class="faint">Caso 0 · Cloud Native</div>
+        </div>
+      </div>
+
+      <nav>
+        @for (item of navItems(); track item.path) {
+          <a [routerLink]="item.path" routerLinkActive="active" class="nav-link">
+            <span class="nav-icon">{{ item.icon }}</span>{{ item.label }}
+          </a>
+        }
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="faint">Modo de autenticación</div>
+        <div class="mono">{{ auth.mode === 'msal' ? 'Microsoft Entra ID (MSAL)' : 'Demo local (/dev/token)' }}</div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div>
+          <div class="faint">Sesión iniciada como</div>
+          <strong>{{ auth.displayName() }}</strong>
+        </div>
+        <div class="topbar-right">
+          @for (role of auth.roles(); track role) {
+            <span class="badge badge-role">{{ role }}</span>
+          }
+          <button class="ghost sm" (click)="logout()">Cerrar sesión</button>
+        </div>
+      </header>
+
+      <main>
+        <router-outlet />
+      </main>
+    </div>
+  </div>
+} @else {
+  <router-outlet />
+}

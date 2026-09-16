@@ -1,0 +1,43 @@
+.orders-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 1080px) {
+  .orders-layout { grid-template-columns: 1fr; }
+}
+
+tbody tr { cursor: pointer; }
+
+tr.selected {
+  background: rgba(79, 124, 255, 0.12);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+.detail-table th {
+  background: transparent;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8rem;
+  width: 130px;
+  padding-left: 0;
+}
+
+.detail-table td { padding-right: 0; }
+
+.line-row {
+  display: grid;
+  grid-template-columns: 1fr 100px auto;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+code {
+  font-family: var(--mono);
+  background: rgba(255, 255, 255, 0.07);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.85em;
+}

@@ -1,0 +1,130 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>Reportería</h1>
+      <p class="muted">
+        KPIs construidos por <code>ms-pedidos360-report</code> a partir del tópico Kafka
+        <code>orders.events</code>. La base de pedidos no se consulta en ningún momento.
+      </p>
+    </div>
+    <button class="ghost" (click)="load()" [disabled]="loading()">Actualizar</button>
+  </div>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+
+  @if (loading()) {
+    <p class="muted"><span class="spinner"></span> Consultando KPIs…</p>
+  } @else {
+    @if (!hasData()) {
+      <div class="alert alert-info">
+        No hay datos proyectados. Esto es esperable si Kafka no está levantado: la reportería
+        solo se alimenta del stream de eventos. Levanta <code>infra/kafka/compose.yml</code> e
+        <code>infra/apps/compose.yml</code> con <code>PEDIDOS360_KAFKA_ENABLED=true</code> y vuelve
+        a generar pedidos.
+      </div>
+    }
+
+    @if (kpis(); as k) {
+      <div class="grid grid-4">
+        <div class="card kpi">
+          <span class="kpi-label">Pedidos totales</span>
+          <span class="kpi-value">{{ k.totalOrders }}</span>
+        </div>
+        <div class="card kpi">
+          <span class="kpi-label">Activos</span>
+          <span class="kpi-value">{{ k.activeOrders }}</span>
+          <span class="faint">{{ k.deliveredOrders }} entregados · {{ k.cancelledOrders }} cancelados</span>
+        </div>
+        <div class="card kpi">
+          <span class="kpi-label">Ventas</span>
+          <span class="kpi-value">{{ k.revenue | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</span>
+          <span class="faint">Ticket medio {{ k.averageTicket | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</span>
+        </div>
+        <div class="card kpi">
+          <span class="kpi-label">Lead time promedio</span>
+          <span class="kpi-value">
+            {{ k.averageLeadTimeMinutes != null ? (k.averageLeadTimeMinutes | number: '1.0-1') + ' min' : '—' }}
+          </span>
+          <span class="faint">Creación → entrega</span>
+        </div>
+      </div>
+    }
+
+    <div class="grid grid-2" style="margin-top: 1rem">
+      <div class="card">
+        <div class="card-head">
+          <h2>Ventas por hora</h2>
+          <span class="faint">Últimas 24 h</span>
+        </div>
+        @if (sales().length) {
+          <div class="bar-chart">
+            @for (bucket of sales(); track bucket.hour) {
+              <div class="bar-row">
+                <span class="mono">{{ bucket.hour }}</span>
+                <div class="bar-track">
+                  <div class="bar-fill" [style.width.%]="salesPercent(bucket.amount)"></div>
+                </div>
+                <span class="right">{{ bucket.amount | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</span>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty">Sin ventas registradas en la ventana.</div>
+        }
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Productos más vendidos</h2>
+        </div>
+        @if (topProducts().length) {
+          <div class="bar-chart">
+            @for (product of topProducts(); track product.sku) {
+              <div class="bar-row">
+                <span>{{ product.name }}</span>
+                <div class="bar-track">
+                  <div class="bar-fill" [style.width.%]="quantityPercent(product.quantity)"></div>
+                </div>
+                <span class="right mono">{{ product.quantity }} u.</span>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty">Aún no hay ventas acumuladas por producto.</div>
+        }
+      </div>
+    </div>
+
+    @if (leadTime(); as lt) {
+      <div class="card" style="margin-top: 1rem">
+        <div class="card-head">
+          <h2>Lead time por pedido entregado</h2>
+          <span class="faint">
+            {{ lt.samples }} muestra(s) ·
+            min {{ lt.minMinutes ?? '—' }} · máx {{ lt.maxMinutes ?? '—' }} min
+          </span>
+        </div>
+        @if (lt.detail.length) {
+          <div class="bar-chart">
+            @for (item of lt.detail; track item.orderId) {
+              <div class="bar-row">
+                <span class="mono">{{ item.orderId.slice(0, 8) }}</span>
+                <div class="bar-track">
+                  <div class="bar-fill" [style.width.%]="leadPercent(item.leadTimeMinutes)"></div>
+                </div>
+                <span class="right">{{ item.leadTimeMinutes }} min</span>
+              </div>
+            }
+          </div>
+          <p class="faint" style="margin-top: 0.75rem">
+            Último entregado: {{ lt.detail[lt.detail.length - 1].deliveredAt | date: 'dd/MM/yyyy HH:mm' }}
+          </p>
+        } @else {
+          <div class="empty">Ningún pedido llegó todavía al estado ENTREGADO.</div>
+        }
+      </div>
+    }
+  }
+</div>

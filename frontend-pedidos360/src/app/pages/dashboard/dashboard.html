@@ -1,0 +1,104 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>{{ greeting() }}</h1>
+      <p class="muted">Hola {{ auth.displayName() }}. Esto es lo que tu rol puede ver hoy.</p>
+    </div>
+    <button class="ghost" (click)="load()" [disabled]="loading()">Actualizar</button>
+  </div>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+
+  @if (loading()) {
+    <p class="muted"><span class="spinner"></span> Cargando resumen…</p>
+  } @else if (data(); as d) {
+    <div class="grid grid-4">
+      <div class="card kpi">
+        <span class="kpi-label">Pedidos visibles</span>
+        <span class="kpi-value">{{ d.totalOrders }}</span>
+        <span class="faint">Según el alcance de tu rol</span>
+      </div>
+      <div class="card kpi">
+        <span class="kpi-label">Pedidos activos</span>
+        <span class="kpi-value">{{ d.activeOrders }}</span>
+        <span class="faint">Aún no entregados ni cancelados</span>
+      </div>
+      <div class="card kpi">
+        <span class="kpi-label">Monto acumulado</span>
+        <span class="kpi-value">{{ d.revenue | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</span>
+        <span class="faint">Excluye pedidos cancelados</span>
+      </div>
+      @if (d.kpis; as k) {
+        <div class="card kpi">
+          <span class="kpi-label">Lead time promedio</span>
+          <span class="kpi-value">
+            {{ k.averageLeadTimeMinutes != null ? (k.averageLeadTimeMinutes | number: '1.0-1') + ' min' : '—' }}
+          </span>
+          <span class="faint">Creación → entrega (vía Kafka)</span>
+        </div>
+      }
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 1rem">
+      <div class="card">
+        <div class="card-head">
+          <h2>Distribución por estado</h2>
+        </div>
+        @if (d.ordersByStatus | keyvalue; as entries) {
+          @if (entries.length) {
+            <div class="bar-chart">
+              @for (entry of entries; track entry.key) {
+                <div class="bar-row">
+                  <app-status-badge [status]="$any(entry.key)" />
+                  <div class="bar-track">
+                    <div class="bar-fill" [style.width.%]="percent($any(entry.value))"></div>
+                  </div>
+                  <span class="right mono">{{ entry.value }}</span>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="empty">Todavía no hay pedidos registrados.</div>
+          }
+        }
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Últimos pedidos</h2>
+          <a routerLink="/orders">Ver todos →</a>
+        </div>
+        @if (d.recentOrders.length) {
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pedido</th>
+                  <th>Cliente</th>
+                  <th>Estado</th>
+                  <th class="right">Total</th>
+                  <th>Creado</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (order of d.recentOrders; track order.id) {
+                  <tr>
+                    <td class="mono">{{ order.id.slice(0, 8) }}</td>
+                    <td>{{ order.customer }}</td>
+                    <td><app-status-badge [status]="order.status" /></td>
+                    <td class="right">{{ order.total | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</td>
+                    <td class="faint">{{ order.createdAt | date: 'dd/MM HH:mm' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="empty">Sin pedidos por ahora.</div>
+        }
+      </div>
+    </div>
+  }
+</div>

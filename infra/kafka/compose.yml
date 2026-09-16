@@ -1,0 +1,98 @@
+# ============================================================================
+# infra/kafka/compose.yml  ->  VM ec2-kafka del Caso 0
+#
+#   docker compose -f infra/kafka/compose.yml up -d
+#
+# El enunciado pide explicitamente "kafka (con Zookeeper)". Kafka moderno puede
+# correr en modo KRaft sin ZooKeeper, pero aqui se respeta el enunciado y ademas
+# sirve para entender el rol del coordinador: ZooKeeper mantiene el registro de
+# brokers, la eleccion de controlador y los metadatos de particiones.
+# ============================================================================
+name: pedidos360-kafka
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: pedidos360-zookeeper
+    hostname: pedidos360-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      # La imagen de Confluent solo habilita el comando de cuatro letras "srvr".
+      # Si se quiere usar "ruok" hay que anadirlo aqui explicitamente.
+      KAFKA_OPTS: "-Dzookeeper.4lw.commands.whitelist=srvr,ruok,stat"
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD-SHELL", "echo srvr | nc -w 2 localhost 2181 | grep -q Mode"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - pedidos360-net
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: pedidos360-kafka
+    hostname: pedidos360-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: pedidos360-zookeeper:2181
+
+      # Dos listeners con el mismo broker:
+      #   INTERNAL -> lo usan los microservicios dentro de la red Docker
+      #   EXTERNAL -> lo usa tu maquina (localhost:9092) para depurar
+      # Sin esta separacion, un cliente externo recibiria como "advertised" un
+      # hostname de Docker que no puede resolver, y fallaria DESPUES de conectar.
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://pedidos360-kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      # 1 broker para el MVP: no se puede replicar mas de lo que hay.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_RETENTION_HOURS: 168
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:29092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+    networks:
+      - pedidos360-net
+    restart: unless-stopped
+
+  # Consola web opcional para ver topicos, particiones, offsets y mensajes.
+  # Muy util en la defensa: permite mostrar el evento viajando de verdad.
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: pedidos360-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: pedidos360
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: pedidos360-kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: pedidos360-zookeeper:2181
+      DYNAMIC_CONFIG_ENABLED: "true"
+    ports:
+      - "8090:8080"
+    networks:
+      - pedidos360-net
+    restart: unless-stopped
+
+networks:
+  pedidos360-net:
+    external: true

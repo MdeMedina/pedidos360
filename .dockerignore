@@ -1,0 +1,9 @@
+**/target
+**/node_modules
+**/dist
+**/.git
+**/.idea
+**/*.iml
+frontend-pedidos360
+docs
+infra

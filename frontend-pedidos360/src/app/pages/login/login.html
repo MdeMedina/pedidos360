@@ -1,0 +1,55 @@
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-head">
+      <span class="brand-mark">P360</span>
+      <div>
+        <h1>Pedidos360</h1>
+        <p class="muted">Plataforma de pedidos con identidad federada</p>
+      </div>
+    </div>
+
+    @if (error()) {
+      <div class="alert alert-error">{{ error() }}</div>
+    }
+    <!-- Error devuelto por Entra ID en el redirect (consentimiento, redirect URI, rol...) -->
+    @if (auth.error()) {
+      <div class="alert alert-error">{{ auth.error() }}</div>
+    }
+
+    @if (auth.mode === 'msal') {
+      <p class="muted">
+        El acceso se delega en Microsoft Entra ID. Pedidos360 nunca ve ni almacena tu contraseña:
+        recibe únicamente un token firmado por el proveedor de identidad.
+      </p>
+      <button class="primary block" (click)="loginWithMicrosoft()">
+        Iniciar sesión con Microsoft
+      </button>
+    } @else {
+      <div class="alert alert-info">
+        <strong>Modo demostración.</strong> El token lo emite el BFF en <code>/dev/token</code> con la
+        misma forma que uno de Entra ID (claims <code>iss</code>, <code>aud</code>, <code>roles</code>,
+        <code>scp</code>). Para usar el flujo real, cambia <code>authMode</code> a <code>'msal'</code>
+        en <code>src/environments/environment.ts</code>.
+      </div>
+
+      <div class="demo-list">
+        @for (user of demoUsers; track user.username) {
+          <button class="demo-user" [disabled]="loading()" (click)="loginAs(user.username, user.roles)">
+            <div class="demo-role">
+              <strong>{{ user.label }}</strong>
+              @for (role of user.roles; track role) {
+                <span class="badge badge-role">{{ role }}</span>
+              }
+            </div>
+            <div class="faint">{{ user.description }}</div>
+            <div class="mono faint">{{ user.username }}</div>
+          </button>
+        }
+      </div>
+
+      @if (loading()) {
+        <p class="muted"><span class="spinner"></span> Solicitando token…</p>
+      }
+    }
+  </div>
+</div>

@@ -1,0 +1,104 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>Auditoría</h1>
+      <p class="muted">
+        Línea de tiempo de eventos de negocio: quién hizo qué, sobre qué pedido y cuándo.
+        Los datos provienen del tópico Kafka <code>audit.timeline</code> y son de solo lectura.
+      </p>
+    </div>
+    <button class="ghost" (click)="search()" [disabled]="loading()">Actualizar</button>
+  </div>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+
+  <div class="card" style="margin-bottom: 1rem">
+    <div class="field-row">
+      <div class="field">
+        <label for="actor">Usuario</label>
+        <input id="actor" [value]="filterActor()" (input)="filterActor.set($any($event.target).value)"
+               placeholder="operador@pedidos360.cl" />
+      </div>
+      <div class="field">
+        <label for="type">Tipo de evento</label>
+        <select id="type" [value]="filterType()" (change)="filterType.set($any($event.target).value)">
+          <option value="">Todos</option>
+          @for (type of types(); track type) {
+            <option [value]="type">{{ type }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="order">Pedido</label>
+        <input id="order" [value]="filterOrderId()" (input)="filterOrderId.set($any($event.target).value)"
+               placeholder="UUID del pedido" />
+      </div>
+      <div class="field">
+        <label for="from">Desde</label>
+        <input id="from" type="datetime-local" [value]="filterFrom()"
+               (input)="filterFrom.set($any($event.target).value)" />
+      </div>
+      <div class="field">
+        <label for="to">Hasta</label>
+        <input id="to" type="datetime-local" [value]="filterTo()"
+               (input)="filterTo.set($any($event.target).value)" />
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="primary" (click)="search()">Buscar</button>
+      <button class="ghost" (click)="clear()">Limpiar filtros</button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <p class="muted"><span class="spinner"></span> Consultando eventos…</p>
+  } @else if (events().length === 0) {
+    <div class="alert alert-info">
+      No hay eventos registrados. La auditoría se alimenta exclusivamente de Kafka: si el broker
+      no está levantado, <code>ms-pedidos360-orders</code> escribe el evento en su log y esta
+      pantalla queda vacía. Es el comportamiento esperado, no un error.
+    </div>
+  } @else {
+    <div class="card">
+      <div class="card-head">
+        <h2>{{ events().length }} evento(s)</h2>
+        <span class="faint">Del más reciente al más antiguo</span>
+      </div>
+
+      <div class="timeline">
+        @for (event of events(); track event.eventId) {
+          <div class="timeline-item">
+            <div class="event-head" (click)="toggle(event.eventId)">
+              <div>
+                <strong>{{ event.type }}</strong>
+                <span class="faint"> · {{ event.occurredAt | date: 'dd/MM/yyyy HH:mm:ss' }}</span>
+              </div>
+              <div class="faint">
+                {{ event.actor || 'sistema' }}
+                @if (event.orderId) {
+                  · pedido <span class="mono">{{ event.orderId.slice(0, 8) }}</span>
+                }
+              </div>
+            </div>
+
+            @if (expanded() === event.eventId) {
+              <div class="event-detail">
+                <table class="detail-table">
+                  <tbody>
+                    <tr><th>eventId</th><td class="mono">{{ event.eventId }}</td></tr>
+                    <tr><th>traceId</th><td class="mono">{{ event.traceId || '—' }}</td></tr>
+                    <tr><th>correlationId</th><td class="mono">{{ event.correlationId || '—' }}</td></tr>
+                    <tr><th>pedido</th><td class="mono">{{ event.orderId || '—' }}</td></tr>
+                  </tbody>
+                </table>
+                <pre>{{ prettyPayload(event.payload) }}</pre>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

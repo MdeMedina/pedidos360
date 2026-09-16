@@ -1,0 +1,171 @@
+# ============================================================================
+# infra/apps/compose.yml  ->  VM ec2-apps del Caso 0
+#
+# Orden de arranque recomendado:
+#   docker network create pedidos360-net
+#   docker compose -f infra/mq/compose.yml    up -d
+#   docker compose -f infra/kafka/compose.yml up -d
+#   docker compose -f infra/apps/compose.yml  --env-file infra/apps/.env up -d --build
+#
+# Copia infra/apps/.env.example a infra/apps/.env y ajusta los valores de Azure
+# antes de usar el perfil "azure".
+# ============================================================================
+name: pedidos360-apps
+
+x-common-env: &common-env
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+  PEDIDOS360_AUDIENCES: ${PEDIDOS360_AUDIENCES:-api://pedidos360-api}
+  PEDIDOS360_ISSUER_URI: ${PEDIDOS360_ISSUER_URI:-https://login.microsoftonline.com/TENANT_ID/v2.0}
+  PEDIDOS360_DEV_SECRET: ${PEDIDOS360_DEV_SECRET:-pedidos360-dev-secret-cambia-esto-en-produccion-1234567890}
+  PEDIDOS360_DEV_ISSUER: ${PEDIDOS360_DEV_ISSUER:-http://localhost/dev-issuer}
+  RABBITMQ_HOST: pedidos360-rabbitmq
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_USER: ${RABBITMQ_USER:-pedidos360}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-pedidos360}
+  KAFKA_BOOTSTRAP: pedidos360-kafka:29092
+  SERVER_PORT: "8080"
+
+x-healthcheck: &healthcheck
+  test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+  interval: 15s
+  timeout: 5s
+  retries: 10
+  start_period: 45s
+
+services:
+  # ---------------- catalogo ----------------
+  catalog-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: ms-pedidos360-catalog
+    container_name: pedidos360-catalog
+    environment:
+      <<: *common-env
+    ports:
+      - "8082:8080"
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+  # ---------------- pedidos ----------------
+  orders-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: ms-pedidos360-orders
+    container_name: pedidos360-orders
+    environment:
+      <<: *common-env
+      CATALOG_URL: http://pedidos360-catalog:8080
+      PEDIDOS360_RABBIT_ENABLED: "true"
+      PEDIDOS360_KAFKA_ENABLED: "true"
+    depends_on:
+      catalog-svc:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+  # ---------------- notificaciones (consumidor RabbitMQ) ----------------
+  notify-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: ms-pedidos360-notify
+    container_name: pedidos360-notify
+    environment:
+      <<: *common-env
+      PEDIDOS360_RABBIT_ENABLED: "true"
+    ports:
+      - "8083:8080"
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+  # ---------------- reporteria (consumidor Kafka) ----------------
+  report-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: ms-pedidos360-report
+    container_name: pedidos360-report
+    environment:
+      <<: *common-env
+      PEDIDOS360_KAFKA_ENABLED: "true"
+      KAFKA_GROUP_ID: pedidos360-report
+    ports:
+      - "8084:8080"
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+  # ---------------- auditoria (consumidor Kafka) ----------------
+  audit-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: ms-pedidos360-audit
+    container_name: pedidos360-audit
+    environment:
+      <<: *common-env
+      PEDIDOS360_KAFKA_ENABLED: "true"
+      KAFKA_GROUP_ID: pedidos360-audit
+    ports:
+      - "8085:8080"
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+  # ---------------- BFF: unica puerta hacia el frontend ----------------
+  bff-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: ms-pedidos360-bff
+    container_name: pedidos360-bff
+    environment:
+      <<: *common-env
+      ORDERS_URL: http://pedidos360-orders:8080
+      CATALOG_URL: http://pedidos360-catalog:8080
+      NOTIFY_URL: http://pedidos360-notify:8080
+      REPORT_URL: http://pedidos360-report:8080
+      AUDIT_URL: http://pedidos360-audit:8080
+    depends_on:
+      orders-svc:
+        condition: service_healthy
+      catalog-svc:
+        condition: service_healthy
+    ports:
+      # Es el UNICO puerto que debe quedar abierto en el Security Group hacia
+      # el API Gateway. Los 8081-8085 se publican solo para depurar en local.
+      - "8080:8080"
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+  # ---------------- frontend ----------------
+  frontend:
+    build:
+      context: ../frontend-pedidos360
+      dockerfile: Dockerfile
+    container_name: pedidos360-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      bff-svc:
+        condition: service_healthy
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+networks:
+  pedidos360-net:
+    external: true

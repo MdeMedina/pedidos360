@@ -1,0 +1,27 @@
+# Java / Maven
+target/
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+
+# Logs y ejecución local
+.logs/
+*.log
+
+# Secretos: el .env real NUNCA va al repositorio
+infra/apps/.env
+.env
+
+# IDE / SO
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Paquete de despliegue
+dist-ec2/

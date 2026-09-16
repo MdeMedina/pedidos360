@@ -1,0 +1,209 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>Pedidos</h1>
+      <p class="muted">
+        @if (canManage()) {
+          Gestión completa del ciclo de vida: aceptar, preparar, despachar y entregar.
+        } @else {
+          Estos son tus pedidos. El backend filtra por usuario: no existe forma de ver los de otro.
+        }
+      </p>
+    </div>
+    <div class="btn-row">
+      <select [value]="statusFilter()" (change)="onFilterChange($any($event.target).value)">
+        <option value="">Todos los estados</option>
+        @for (status of statuses; track status) {
+          <option [value]="status">{{ status }}</option>
+        }
+      </select>
+      <button class="ghost" (click)="load()" [disabled]="loading()">Actualizar</button>
+      @if (canCreate()) {
+        <button class="primary" (click)="showForm.set(!showForm())">
+          {{ showForm() ? 'Cerrar' : 'Nuevo pedido' }}
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+  @if (info()) {
+    <div class="alert alert-ok">{{ info() }}</div>
+  }
+
+  @if (showForm()) {
+    <div class="card" style="margin-bottom: 1rem">
+      <div class="card-head"><h2>Nuevo pedido</h2></div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="addr">Dirección de entrega</label>
+          <input id="addr" [value]="draftAddress()" (input)="draftAddress.set($any($event.target).value)"
+                 placeholder="Av. Providencia 1234, Santiago" />
+        </div>
+        @if (canManage()) {
+          <div class="field">
+            <label for="cust">Cliente (opcional)</label>
+            <input id="cust" [value]="draftCustomer()" (input)="draftCustomer.set($any($event.target).value)"
+                   placeholder="cliente@pedidos360.cl" />
+          </div>
+        }
+      </div>
+
+      <div class="field">
+        <label for="notes">Notas</label>
+        <input id="notes" [value]="draftNotes()" (input)="draftNotes.set($any($event.target).value)"
+               placeholder="Sin cebolla, timbre 4B" />
+      </div>
+
+      <label>Productos</label>
+      @for (line of draftLines(); track $index) {
+        <div class="line-row">
+          <select [value]="line.sku" (change)="updateLineSku($index, $any($event.target).value)">
+            <option value="">Selecciona un producto…</option>
+            @for (product of products(); track product.id) {
+              <option [value]="product.sku">
+                {{ product.name }} — {{ product.price | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}
+                (stock {{ product.stock }})
+              </option>
+            }
+          </select>
+          <input type="number" min="1" [value]="line.quantity"
+                 (input)="updateLineQuantity($index, +$any($event.target).value)" />
+          <button class="danger sm" (click)="removeLine($index)" [disabled]="draftLines().length === 1">
+            Quitar
+          </button>
+        </div>
+      }
+
+      <div class="btn-row" style="margin-top: 0.75rem; justify-content: space-between">
+        <button class="ghost sm" (click)="addLine()">+ Agregar línea</button>
+        <div class="btn-row">
+          <strong>Total estimado: {{ draftTotal() | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</strong>
+          <button class="ghost" (click)="resetForm()">Cancelar</button>
+          <button class="primary" (click)="submit()" [disabled]="busy()">Crear pedido</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <div class="orders-layout">
+    <div class="card">
+      <div class="card-head">
+        <h2>Listado</h2>
+        <span class="faint">{{ orders().length }} pedido(s)</span>
+      </div>
+
+      @if (loading()) {
+        <p class="muted"><span class="spinner"></span> Cargando…</p>
+      } @else if (orders().length === 0) {
+        <div class="empty">No hay pedidos que coincidan con el filtro.</div>
+      } @else {
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Cliente</th>
+                <th>Estado</th>
+                <th class="right">Total</th>
+                <th>Creado</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (order of orders(); track order.id) {
+                <tr (click)="select(order)" [class.selected]="selected()?.id === order.id">
+                  <td class="mono">{{ order.id.slice(0, 8) }}</td>
+                  <td>{{ order.customer }}</td>
+                  <td><app-status-badge [status]="order.status" /></td>
+                  <td class="right">{{ order.total | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="faint">{{ order.createdAt | date: 'dd/MM HH:mm' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+
+    <div class="card detail">
+      @if (selected(); as order) {
+        <div class="card-head">
+          <h2>Detalle</h2>
+          <app-status-badge [status]="order.status" />
+        </div>
+
+        <table class="detail-table">
+          <tbody>
+            <tr><th>ID</th><td class="mono">{{ order.id }}</td></tr>
+            <tr><th>Cliente</th><td>{{ order.customer }}</td></tr>
+            <tr><th>Dirección</th><td>{{ order.deliveryAddress || '—' }}</td></tr>
+            <tr><th>Notas</th><td>{{ order.notes || '—' }}</td></tr>
+            <tr><th>Creado</th><td>{{ order.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td></tr>
+            <tr><th>Aceptado</th><td>{{ order.acceptedAt ? (order.acceptedAt | date: 'dd/MM HH:mm') : '—' }}</td></tr>
+            <tr><th>Entregado</th><td>{{ order.deliveredAt ? (order.deliveredAt | date: 'dd/MM HH:mm') : '—' }}</td></tr>
+            <tr>
+              <th>Lead time</th>
+              <td>{{ order.leadTimeMinutes !== null ? order.leadTimeMinutes + ' min' : 'en curso' }}</td>
+            </tr>
+            <tr><th>Última acción</th><td>{{ order.lastUpdatedBy || '—' }}</td></tr>
+          </tbody>
+        </table>
+
+        <h3 style="margin-top: 1rem">Líneas</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>SKU</th><th>Producto</th><th class="right">Cant.</th><th class="right">Subtotal</th></tr>
+            </thead>
+            <tbody>
+              @for (item of order.items; track item.sku) {
+                <tr>
+                  <td class="mono">{{ item.sku }}</td>
+                  <td>{{ item.name }}</td>
+                  <td class="right">{{ item.quantity }}</td>
+                  <td class="right">{{ item.subtotal | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</td>
+                </tr>
+              }
+              <tr>
+                <td colspan="3" class="right"><strong>Total</strong></td>
+                <td class="right"><strong>{{ order.total | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top: 1rem">Transiciones disponibles</h3>
+        @if (order.allowedTransitions.length) {
+          <div class="btn-row">
+            @for (target of order.allowedTransitions; track target) {
+              <button
+                [class.primary]="target !== 'CANCELLED'"
+                [class.danger]="target === 'CANCELLED'"
+                [disabled]="busy() || !canTransition(order, target)"
+                (click)="changeStatus(order, target)">
+                {{ statusLabels[target] }}
+              </button>
+            }
+          </div>
+          <p class="faint" style="margin-top: 0.5rem">
+            Esta lista viene del backend (<code>allowedTransitions</code>). Por eso nunca aparece
+            «Despachar» en un pedido que todavía no fue aceptado.
+          </p>
+        } @else {
+          <p class="muted">Estado final: el pedido ya no admite más cambios.</p>
+        }
+
+        @if (auth.hasRole('ADMIN') && (order.status === 'CREATED' || order.status === 'CANCELLED')) {
+          <div class="btn-row" style="margin-top: 0.75rem">
+            <button class="danger sm" (click)="remove(order)" [disabled]="busy()">Eliminar pedido</button>
+          </div>
+        }
+      } @else {
+        <div class="empty">Selecciona un pedido del listado para ver su detalle.</div>
+      }
+    </div>
+  </div>
+</div>

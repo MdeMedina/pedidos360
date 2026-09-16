@@ -1,0 +1,92 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: ms-pedidos360-catalog
+  profiles:
+    # dev  -> H2 en memoria + tokens locales firmados con HMAC (demo sin Azure)
+    # azure-> validacion real contra Microsoft Entra ID
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    url: jdbc:h2:mem:catalog;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate.format_sql: true
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+pedidos360:
+  security:
+    # Debe coincidir con el "Application ID URI" o el client-id del backend en Entra ID.
+    # Es el mismo valor que se configura en "audiences" del JWT Authorizer de API Gateway.
+    # Tenant ejemploDuoc / registro pedidos360-api.
+    # Se listan DOS valores porque el claim aud depende de la version del token:
+    #   v2 (requestedAccessTokenVersion: 2) -> el client id 1e8d01fa-bd60-4403-ae34-4288007ed4dd
+    #   v1 (null)                           -> el Application ID URI api://pedidos360-api
+    audiences: ${PEDIDOS360_AUDIENCES:api://pedidos360-api,1e8d01fa-bd60-4403-ae34-4288007ed4dd}
+    dev-secret: ${PEDIDOS360_DEV_SECRET:pedidos360-dev-secret-cambia-esto-en-produccion-1234567890}
+    dev-issuer: ${PEDIDOS360_DEV_ISSUER:http://localhost/dev-issuer}
+    # En local CORS lo resuelve la aplicacion. Detras de AWS API Gateway hay que
+    # ponerlo en false (PEDIDOS360_CORS_ENABLED=false): el gateway ya agrega las
+    # cabeceras y duplicarlas hace que el navegador rechace la respuesta.
+    # Claves publicas del tenant. Al estar definido, el arranque NO depende de que
+    # login.microsoftonline.com responda: las claves se piden al llegar el primer
+    # token. Dejarlo vacio activa el descubrimiento OIDC en el arranque.
+    jwk-set-uri: ${PEDIDOS360_JWK_SET_URI:https://login.microsoftonline.com/41f0982b-bfd4-40ea-8b24-cd683cd0f362/discovery/v2.0/keys}
+    cors-enabled: ${PEDIDOS360_CORS_ENABLED:true}
+    cors-allowed-origins: ${PEDIDOS360_CORS_ORIGINS:http://localhost:*,https://localhost:*}
+    public-paths:
+      - /actuator/health/**
+      - /actuator/info
+      - /v3/api-docs/**
+      - /swagger-ui/**
+      - /swagger-ui.html
+      - /h2-console/**
+
+management:
+  # El indicador de salud de RabbitMQ intenta abrir una conexion real. Sin broker
+  # levantado dejaria el servicio en DOWN aunque funcione perfecto, y en Docker eso
+  # se traduce en un contenedor "unhealthy" que nunca arranca a sus dependientes.
+  health:
+    rabbit:
+      # Se ata al MISMO flag que gobierna la mensajeria: si este servicio no usa
+      # RabbitMQ, tampoco debe reportarse DOWN por no poder conectarse a el.
+      enabled: ${pedidos360.messaging.rabbit-enabled:false}
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    org.springframework.security: INFO
+
+---
+spring:
+  config:
+    activate:
+      on-profile: azure
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Guia 1.3.3 / 1.3.7: el issuer del tenant.
+          #  - Workforce (Azure AD):        https://login.microsoftonline.com/<TENANT_ID>/v2.0
+          #  - External ID (CIAM/User Flow): https://<tenant>.ciamlogin.com/<TENANT_ID>/v2.0
+          # Tenant ejemploDuoc (workforce). Este valor SOLO es correcto si
+          # pedidos360-api tiene requestedAccessTokenVersion: 2 en su manifiesto;
+          # con v1 el iss seria https://sts.windows.net/41f0982b-bfd4-40ea-8b24-cd683cd0f362/
+          issuer-uri: ${PEDIDOS360_ISSUER_URI:https://login.microsoftonline.com/41f0982b-bfd4-40ea-8b24-cd683cd0f362/v2.0}

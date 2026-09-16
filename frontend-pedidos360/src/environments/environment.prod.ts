@@ -1,0 +1,65 @@
+/**
+ * Configuracion de PRODUCCION (ng build --configuration=production).
+ *
+ * Tenant ejemploDuoc (workforce) · registros pedidos360-spa y pedidos360-api.
+ * Todos los valores de Entra ID ya son los reales: lo unico que hay que cambiar
+ * para pasar del modo demo al flujo real de MSAL es la linea authMode.
+ *
+ *   'dev'  -> el token lo emite el BFF en /dev/token. Permite trabajar y demostrar
+ *             la aplicacion sin depender del tenant de Azure. NO usa MSAL.
+ *   'msal' -> flujo real: MSAL redirige a Microsoft Entra ID, obtiene el access
+ *             token y lo adjunta a cada peticion (guia 1.3.2).
+ */
+export const environment = {
+  production: true,
+
+  // En produccion siempre MSAL: el emisor de tokens de demo no existe fuera del
+  // perfil dev del backend, asi que 'dev' aqui simplemente no funcionaria.
+  authMode: 'msal' as 'dev' | 'msal',
+
+  /**
+   * Unico backend que conoce el frontend.
+   * En local: el BFF. Publicado: la URL de invocacion de AWS API Gateway
+   * (apuntar al BFF directo se saltaria el JWT Authorizer).
+   */
+  // Reemplazar por la URL de invocacion del API Gateway (valor I del runbook).
+  apiBaseUrl: 'https://<API_ID>.execute-api.us-east-1.amazonaws.com',
+
+  msal: {
+    /** Application (client) ID del registro SPA "pedidos360-spa". */
+    clientId: 'd19179d8-5de0-491a-a16f-20b8dc658709',
+
+    /**
+     * Tenant ejemploDuoc (workforce). Es el "en que tenant estoy" de la guia 1.3.2.
+     * Con External ID / CIAM seria https://<tenant>.ciamlogin.com/<TENANT_ID>
+     */
+    authority: 'https://login.microsoftonline.com/41f0982b-bfd4-40ea-8b24-cd683cd0f362',
+
+    /**
+     * Solo hace falta cuando la authority NO es login.microsoftonline.com
+     * (External ID / B2C). En workforce va vacio.
+     */
+    knownAuthorities: [] as string[],
+
+    /**
+     * Debe estar registrado en pedidos360-spa como plataforma "Single-page application".
+     * Entra ID solo acepta http:// en localhost: si sirves la SPA desde otro host,
+     * tiene que ser https.
+     */
+    redirectUri: 'http://localhost:4200/auth/callback',
+    postLogoutRedirectUri: 'http://localhost:4200/login',
+
+    /**
+     * Scopes de NUESTRA API (no de Microsoft Graph), con el prefijo del
+     * Application ID URI de pedidos360-api.
+     */
+    apiScopes: [
+      'api://pedidos360-api/orders.read',
+      'api://pedidos360-api/orders.write',
+      'api://pedidos360-api/catalog.read',
+      'api://pedidos360-api/catalog.write',
+      'api://pedidos360-api/report.read',
+      'api://pedidos360-api/audit.read',
+    ],
+  },
+};

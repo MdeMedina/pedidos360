@@ -1,0 +1,30 @@
+# ============================================================================
+# Imagen de SOLO EJECUCION: recibe un jar ya compilado, no compila nada.
+#
+#   docker build -f Dockerfile.runtime --build-arg JAR_FILE=jars/orders.jar \
+#                -t pedidos360/orders .
+#
+# Por que existe, ademas del Dockerfile normal:
+# compilar con Maven dentro de la instancia EC2 descarga cientos de dependencias
+# y necesita ~2 GB de RAM solo para el compilador. En una t3.micro o t3.small el
+# build se queda sin memoria y el contenedor muere con "Killed" sin mas
+# explicacion. Compilando en tu maquina y subiendo solo los jars, el despliegue
+# pasa de ~15 minutos con riesgo de OOM a ~40 segundos.
+# ============================================================================
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+RUN addgroup -S pedidos && adduser -S pedidos -G pedidos
+
+ARG JAR_FILE
+COPY ${JAR_FILE} app.jar
+RUN chown -R pedidos:pedidos /app
+USER pedidos
+
+EXPOSE 8080
+# Todos los servicios escuchan en 8080 DENTRO del contenedor; el puerto propio
+# de cada uno (8081, 8082, ...) solo aplica cuando se ejecutan como jar suelto.
+# Asi el EXPOSE, el healthcheck y las URLs entre contenedores son uniformes.
+ENV SERVER_PORT=8080
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=70 -XX:+UseContainerSupport"
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

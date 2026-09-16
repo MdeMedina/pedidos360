@@ -1,0 +1,42 @@
+# ============================================================================
+# infra/mq/compose.yml  ->  VM ec2-mq del Caso 0
+#
+#   docker network create pedidos360-net   (una sola vez)
+#   docker compose -f infra/mq/compose.yml up -d
+#
+# UI de administracion: http://localhost:15672  (pedidos360 / pedidos360)
+# ============================================================================
+name: pedidos360-mq
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: pedidos360-rabbitmq
+    hostname: pedidos360-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: pedidos360
+      RABBITMQ_DEFAULT_PASS: pedidos360
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"    # AMQP: lo usan orders (productor) y notify (consumidor)
+      - "15672:15672"  # consola web: colas, DLQ, tasa de mensajes
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      # Sin healthcheck, notify arrancaria antes que el broker y moriria
+      # reintentando la conexion.
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - pedidos360-net
+    restart: unless-stopped
+
+volumes:
+  rabbitmq-data:
+
+networks:
+  pedidos360-net:
+    external: true

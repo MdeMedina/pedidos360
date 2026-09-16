@@ -1,0 +1,143 @@
+# ============================================================================
+# Variante de infra/apps/compose.yml para DESPLIEGUE EN EC2.
+#
+# Diferencia unica con el compose normal: no compila con Maven dentro de la
+# instancia, sino que empaqueta jars ya construidos en tu maquina
+# (./scripts/package-for-ec2.sh). En una t3.small el build con Maven se queda
+# sin memoria; asi el despliegue tarda segundos y no minutos.
+#
+#   tar -xzf pedidos360-apps.tgz && cd pedidos360
+#   cp .env.example .env && nano .env
+#   docker compose --env-file .env up -d
+# ============================================================================
+name: pedidos360-apps
+
+x-common-env: &common-env
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-azure}
+  PEDIDOS360_AUDIENCES: ${PEDIDOS360_AUDIENCES:-api://pedidos360-api}
+  PEDIDOS360_ISSUER_URI: ${PEDIDOS360_ISSUER_URI:?falta PEDIDOS360_ISSUER_URI en el .env}
+  # Detras de API Gateway el CORS lo resuelve el gateway. Si lo dejaras en true,
+  # la respuesta viajaria con dos Access-Control-Allow-Origin y el navegador la
+  # rechazaria con un error que no menciona la duplicacion.
+  PEDIDOS360_CORS_ENABLED: "false"
+  RABBITMQ_HOST: ${RABBITMQ_HOST:-pedidos360-rabbitmq}
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_USER: ${RABBITMQ_USER:-pedidos360}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-pedidos360}
+  KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-pedidos360-kafka:29092}
+  SERVER_PORT: "8080"
+
+x-healthcheck: &healthcheck
+  test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+  interval: 15s
+  timeout: 5s
+  retries: 10
+  start_period: 45s
+
+x-build: &build-base
+  context: .
+  dockerfile: Dockerfile.runtime
+
+services:
+  catalog-svc:
+    build:
+      <<: *build-base
+      args:
+        JAR_FILE: jars/catalog.jar
+    container_name: pedidos360-catalog
+    environment: {<<: *common-env}
+    expose: ["8080"]
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+  orders-svc:
+    build:
+      <<: *build-base
+      args:
+        JAR_FILE: jars/orders.jar
+    container_name: pedidos360-orders
+    environment:
+      <<: *common-env
+      CATALOG_URL: http://pedidos360-catalog:8080
+      PEDIDOS360_RABBIT_ENABLED: ${PEDIDOS360_RABBIT_ENABLED:-true}
+      PEDIDOS360_KAFKA_ENABLED: ${PEDIDOS360_KAFKA_ENABLED:-true}
+    depends_on:
+      catalog-svc: {condition: service_healthy}
+    expose: ["8080"]
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+  notify-svc:
+    build:
+      <<: *build-base
+      args:
+        JAR_FILE: jars/notify.jar
+    container_name: pedidos360-notify
+    environment:
+      <<: *common-env
+      PEDIDOS360_RABBIT_ENABLED: ${PEDIDOS360_RABBIT_ENABLED:-true}
+    expose: ["8080"]
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+  report-svc:
+    build:
+      <<: *build-base
+      args:
+        JAR_FILE: jars/report.jar
+    container_name: pedidos360-report
+    environment:
+      <<: *common-env
+      PEDIDOS360_KAFKA_ENABLED: ${PEDIDOS360_KAFKA_ENABLED:-true}
+      KAFKA_GROUP_ID: pedidos360-report
+    expose: ["8080"]
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+  audit-svc:
+    build:
+      <<: *build-base
+      args:
+        JAR_FILE: jars/audit.jar
+    container_name: pedidos360-audit
+    environment:
+      <<: *common-env
+      PEDIDOS360_KAFKA_ENABLED: ${PEDIDOS360_KAFKA_ENABLED:-true}
+      KAFKA_GROUP_ID: pedidos360-audit
+    expose: ["8080"]
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+  bff-svc:
+    build:
+      <<: *build-base
+      args:
+        JAR_FILE: jars/bff.jar
+    container_name: pedidos360-bff
+    environment:
+      <<: *common-env
+      ORDERS_URL: http://pedidos360-orders:8080
+      CATALOG_URL: http://pedidos360-catalog:8080
+      NOTIFY_URL: http://pedidos360-notify:8080
+      REPORT_URL: http://pedidos360-report:8080
+      AUDIT_URL: http://pedidos360-audit:8080
+    depends_on:
+      orders-svc: {condition: service_healthy}
+      catalog-svc: {condition: service_healthy}
+    ports:
+      # UNICO puerto publicado. Los demas usan "expose", es decir, solo son
+      # alcanzables desde dentro de la red Docker: ni siquiera con el Security
+      # Group abierto se puede llegar a orders o catalog desde Internet.
+      - "8080:8080"
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
+networks:
+  pedidos360-net:
+    external: true

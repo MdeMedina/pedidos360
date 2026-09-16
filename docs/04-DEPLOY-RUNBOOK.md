@@ -518,10 +518,22 @@ API Gateway → **Crear API** → **HTTP API** → *Compilar*
 
 | Método | Ruta | Authorizer | Integración |
 |---|---|---|---|
-| `ANY` | `/api/{proxy+}` | `entra-id-authorizer` | la de 4.2 |
-| `GET` | `/actuator/health` | *(ninguno)* | la de 4.2 |
+| `ANY` | `/api/{proxy+}` | `entra-id-authorizer` | `http://<F>:8080/{proxy}` (la de 4.2) |
+| `GET` | `/actuator/health` | *(ninguno)* | `http://<F>:8080/actuator/health` (**nueva**) |
 
 Para cada una: selecciónala → **Adjuntar autorización**, luego → **Adjuntar integración**.
+
+> ⚠️ **Son DOS integraciones, no una.** Si intentas reutilizar la de `{proxy}` en
+> `/actuator/health`, API Gateway responde:
+>
+> ```
+> The following path variables in the integration URI are not present
+> in the route key: proxy
+> ```
+>
+> El `{proxy}` de la integración se rellena con lo que captura la ruta, y
+> `/actuator/health` es una ruta fija sin variables: no hay nada con qué rellenarlo.
+> La segunda integración lleva la URL completa escrita a mano, sin `{proxy}`.
 
 > **Nunca publiques `/dev/{proxy+}`.** Es el emisor de tokens de demo. Con
 > `SPRING_PROFILES_ACTIVE=azure` el controlador ni siquiera se registra, pero no lo
@@ -700,7 +712,13 @@ Si no: security group sin el 8080, o los contenedores caídos.
 
 ## Todo da 404
 
-Falta `{proxy}` al final de la URL de integración (fase 4.2).
+Falta `{proxy}` al final de la URL de integración (fase 4.2), o la etapa `$default`
+no existe (fase 4.1): sin etapa las rutas están definidas pero no desplegadas.
+
+## `The following path variables in the integration URI are not present in the route key: proxy`
+
+Estás atando la integración que lleva `{proxy}` a una ruta sin `{proxy+}`, típicamente
+`/actuator/health`. Esa ruta necesita su propia integración con la URL completa (fase 4.4).
 
 ## `curl` funciona pero el navegador da error de CORS
 

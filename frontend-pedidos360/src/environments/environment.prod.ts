@@ -22,8 +22,7 @@ export const environment = {
    * En local: el BFF. Publicado: la URL de invocacion de AWS API Gateway
    * (apuntar al BFF directo se saltaria el JWT Authorizer).
    */
-  // Reemplazar por la URL de invocacion del API Gateway (valor I del runbook).
-  apiBaseUrl: 'https://<API_ID>.execute-api.us-east-1.amazonaws.com',
+  apiBaseUrl: 'https://unyofrbc70.execute-api.us-east-1.amazonaws.com',
 
   msal: {
     /** Application (client) ID del registro SPA "pedidos360-spa". */

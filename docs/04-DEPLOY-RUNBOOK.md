@@ -492,11 +492,18 @@ API Gateway → **Crear API** → **HTTP API** → *Compilar*
 |---|---|
 | Tipo | **URI de HTTP** |
 | Método | **ANY** |
-| URL | `http://<F>:8080/{proxy}` |
+| URL | `http://<F>:8080/api/{proxy}` |
 
-> **`{proxy}` no es opcional.** Sin él todas las rutas caerían en la misma URL fija del
-> backend. Con `{proxy}` el gateway reenvía el resto del path tal cual y una sola
-> integración cubre todos los endpoints.
+> **Fíjate en que la URL lleva `/api/{proxy}`, no solo `/{proxy}`.**
+>
+> En la ruta `/api/{proxy+}`, la variable `{proxy}` captura **únicamente lo que viene
+> después de `/api/`**. Con `http://<F>:8080/{proxy}`, una petición a
+> `/api/catalog/products` llega al backend como `/catalog/products` y Spring responde
+> 404 con `"path": "/catalog/products"`: el prefijo se pierde por el camino.
+>
+> El fallo no aparece hasta la primera petición **autenticada**. Sin token el authorizer
+> corta antes de llegar al backend, así que un `curl` sin credenciales devuelve 401 y todo
+> parece correcto.
 
 ### 4.3 · Crear el JWT Authorizer
 
@@ -518,8 +525,7 @@ API Gateway → **Crear API** → **HTTP API** → *Compilar*
 
 | Método | Ruta | Authorizer | Integración |
 |---|---|---|---|
-| `ANY` | `/api/{proxy+}` | `entra-id-authorizer` | `http://<F>:8080/{proxy}` (la de 4.2) |
-| `OPTIONS` | `/api/{proxy+}` | *(ninguno)* | `http://<F>:8080/{proxy}` (la misma) |
+| `GET` `POST` `PUT` `PATCH` `DELETE` | `/api/{proxy+}` | `entra-id-authorizer` | `http://<F>:8080/api/{proxy}` (la de 4.2) |
 | `GET` | `/actuator/health` | *(ninguno)* | `http://<F>:8080/actuator/health` (**nueva**) |
 
 Para cada una: selecciónala → **Adjuntar autorización**, luego → **Adjuntar integración**.
@@ -536,17 +542,17 @@ Para cada una: selecciónala → **Adjuntar autorización**, luego → **Adjunta
 > `/actuator/health` es una ruta fija sin variables: no hay nada con qué rellenarlo.
 > La segunda integración lleva la URL completa escrita a mano, sin `{proxy}`.
 
-> ⚠️ **Hace falta una tercera ruta: `OPTIONS /api/{proxy+}` SIN authorizer.**
+> ⚠️ **Métodos explícitos, NO `ANY`.** Son cinco rutas sobre `/api/{proxy+}`: `GET`,
+> `POST`, `PUT`, `PATCH` y `DELETE`, cada una con el authorizer y la integración.
 >
-> `ANY` incluye `OPTIONS`, así que el preflight del navegador cae en la ruta protegida.
-> Y el navegador **nunca manda el token en un preflight**: recibe 401 y cancela la
-> petición real. Configurar CORS no basta — las cabeceras llegan correctas pero el
-> status sigue siendo 401, y el navegador exige 2xx.
+> El manejo automático de CORS de API Gateway solo responde el preflight **cuando ninguna
+> ruta hace match con el `OPTIONS`**. Con `ANY` el preflight cae en la ruta protegida, y
+> como el navegador nunca manda el token en un preflight, recibe 401 y cancela la petición
+> real. Crear una ruta `OPTIONS` explícita tampoco sirve: devuelve `403 Invalid CORS request`.
 >
-> La ruta explícita `OPTIONS /api/{proxy+}` gana sobre `ANY` por ser más específica.
-> Se le adjunta la misma integración de `{proxy}` y **ninguna autorización**. No abre
-> ningún agujero: un OPTIONS no devuelve datos, solo anuncia métodos y cabeceras
-> permitidas. El backend ya lo contempla con `requestMatchers(OPTIONS, "/**").permitAll()`.
+> Con métodos explícitos el `OPTIONS` queda huérfano, el gateway lo contesta él mismo con
+> 204 y sin invocar al authorizer. No se pierde seguridad: los cinco métodos siguen
+> protegidos y un OPTIONS no devuelve datos.
 
 > **Nunca publiques `/dev/{proxy+}`.** Es el emisor de tokens de demo. Con
 > `SPRING_PROFILES_ACTIVE=azure` el controlador ni siquiera se registra, pero no lo
@@ -732,6 +738,11 @@ no existe (fase 4.1): sin etapa las rutas están definidas pero no desplegadas.
 
 Estás atando la integración que lleva `{proxy}` a una ruta sin `{proxy+}`, típicamente
 `/actuator/health`. Esa ruta necesita su propia integración con la URL completa (fase 4.4).
+
+## El backend responde 404 y el `"path"` viene sin el prefijo `/api`
+
+La integración apunta a `/{proxy}` en vez de `/api/{proxy}` (fase 4.2). `{proxy}` solo
+captura lo que sigue a `/api/`, así que el prefijo hay que reponerlo en la integración.
 
 ## El preflight OPTIONS devuelve 401 aunque CORS esté configurado
 

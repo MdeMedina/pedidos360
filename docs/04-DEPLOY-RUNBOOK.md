@@ -297,13 +297,21 @@ EC2 → **Lanzar instancias**. Mismos valores en las tres salvo lo indicado:
 > minutos después de arrancar, que es un fallo desconcertante porque el `docker compose up`
 > aparenta haber funcionado.
 
-**Datos de usuario** — pega esto en *Detalles avanzados → Datos de usuario*:
+**Datos de usuario.** En el formulario de lanzamiento, despliega la sección
+**Detalles avanzados** (viene plegada) y baja hasta el último campo, **Datos de usuario**
+(*User data*). Es un cuadro de texto grande al final de todo.
+
+Ahí pegas el **contenido** del archivo `infra/ec2-user-data.sh`, desde `#!/bin/bash` hasta
+la última línea. Para verlo y copiarlo:
 
 ```bash
-cat "EV 1/pedidos360/infra/ec2-user-data.sh"
+cat infra/ec2-user-data.sh
 ```
 
-Instala Docker, el plugin compose y crea la red `pedidos360-net`.
+> Se pega el contenido del archivo, no el comando `cat`.
+
+Va en **las tres instancias**: las tres necesitan Docker, el plugin compose y la red
+`pedidos360-net`. El script se ejecuta una sola vez, como root, en el primer arranque.
 
 ### 2.3 · Anotar las IP privadas
 

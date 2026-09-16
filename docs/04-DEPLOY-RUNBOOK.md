@@ -234,7 +234,13 @@ curl -s "https://login.microsoftonline.com/$TENANT_ID/v2.0/.well-known/openid-co
 
 ### 2.1 · Crear los Security Groups
 
-EC2 → **Grupos de seguridad** → **Crear**. Tres grupos, en este orden:
+EC2 → **Grupos de seguridad** → **Crear**. Tres grupos, en este orden.
+
+> **Las tres tablas son reglas de ENTRADA (inbound).** El **outbound se deja como viene
+> por defecto**: todo el tráfico de salida permitido. No es pereza, hace falta:
+> `ec2-apps` sale a `login.microsoftonline.com` a descargar el JWKS para validar tokens,
+> y las tres instancias salen a Docker Hub y a los repos de Amazon Linux. Si cierras el
+> outbound sin abrir esos destinos, el backend arranca pero rechaza todos los tokens.
 
 **`sg-pedidos360-apps`**
 

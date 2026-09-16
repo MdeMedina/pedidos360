@@ -1,33 +1,19 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { from, switchMap } from 'rxjs';
 
 import { environment } from '../../environments/environment';
 import { AuthService } from './auth.service';
 import { msalEnabled } from './msal.config';
 
 /**
- * Unico punto donde se adjunta el access token a las peticiones.
+ * Adjunta el token del MODO DEMO. En modo MSAL no hace nada.
  *
- * Por que un interceptor propio en lugar de MsalInterceptor, que es el que
- * enseña la guia 1.3.2:
+ * Guia 1.3.2: de adjuntar el token en el flujo real se encarga MsalInterceptor,
+ * que ademas renueva silenciosamente el access token cuando expira. Duplicar la
+ * cabecera aqui romperia esa renovacion, asi que este interceptor se aparta.
  *
- * MsalInterceptor depende de MsalBroadcastService y solo pide el token cuando
- * inProgress$ vale InteractionStatus.None. Ese estado se alimenta de eventos
- * que hay que estar escuchando en el momento exacto en que ocurren; si el
- * servicio se construye tarde —o el ciclo de vida arranca desde un app
- * initializer, como aqui— el estado se queda en Startup y el interceptor deja
- * pasar TODAS las peticiones sin cabecera Authorization. El sintoma es
- * desconcertante: el login funciona, el token existe y es valido, pero el
- * backend responde 401 porque nunca le llega nada que validar.
- *
- * Este interceptor no depende de ningun estado global: pide el token con
- * acquireTokenSilent —adquisicion silenciosa primero, que es el patron que
- * recomienda Microsoft— y lo adjunta. Es determinista y se depura leyendo
- * quince lineas.
- *
- * MSALInterceptorConfigFactory se conserva en msal.config.ts porque documenta
- * que scopes corresponden a que URL, que es la parte conceptual de la guia.
+ * Solo existe para el perfil de demostracion, donde el token lo emite el BFF en
+ * /dev/token y MSAL no interviene.
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
@@ -40,16 +26,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     return next(req);
   }
 
-  if (!msalEnabled) {
-    const token = auth.devToken();
-    return token
-      ? next(req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }))
-      : next(req);
+  // En modo MSAL se aparta: el token lo pone MsalInterceptor.
+  if (msalEnabled) {
+    return next(req);
   }
 
-  return from(auth.acquireApiToken()).pipe(
-    switchMap((token) =>
-      next(token ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req),
-    ),
-  );
+  const token = auth.devToken();
+  return token
+    ? next(req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }))
+    : next(req);
 };

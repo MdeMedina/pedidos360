@@ -65,7 +65,21 @@ export function MSALInstanceFactory(): IPublicClientApplication {
  */
 export function MSALInterceptorConfigFactory(): MsalInterceptorConfiguration {
   const protectedResourceMap = new Map<string, Array<string> | null>();
-  protectedResourceMap.set(`${environment.apiBaseUrl}/api`, environment.msal.apiScopes);
+
+  /**
+   * El comodin final NO es opcional.
+   *
+   * MSAL compara el pathname de la clave con un patron ANCLADO (matchPatternStrict,
+   * el modo por defecto desde msal-browser v5): la clave tiene que cubrir el pathname
+   * completo. Con `${environment.apiBaseUrl}/api` la clave describe exactamente la ruta
+   * "/api", asi que NO coincide con "/api/orders" ni con "/api/catalog/products", y el
+   * interceptor deja pasar esas peticiones sin adjuntar token.
+   *
+   * El sintoma es enganoso: el login funciona, el token existe y es valido, pero el
+   * backend responde 401 porque nunca le llega la cabecera Authorization. En el log del
+   * servidor se ve "Set SecurityContextHolder to anonymous" en vez de un error de token.
+   */
+  protectedResourceMap.set(`${environment.apiBaseUrl}/api/*`, environment.msal.apiScopes);
   return {
     interactionType: InteractionType.Redirect,
     protectedResourceMap,

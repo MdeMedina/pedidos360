@@ -1,4 +1,4 @@
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptors, withInterceptorsFromDi } from '@angular/common/http';
 import {
   ApplicationConfig,
   Provider,
@@ -14,6 +14,7 @@ import {
   MSAL_INTERCEPTOR_CONFIG,
   MsalBroadcastService,
   MsalGuard,
+  MsalInterceptor,
   MsalService,
 } from '@azure/msal-angular';
 
@@ -38,20 +39,11 @@ const msalProviders: Provider[] = msalEnabled
       { provide: MSAL_INSTANCE, useFactory: MSALInstanceFactory },
       { provide: MSAL_GUARD_CONFIG, useFactory: MSALGuardConfigFactory },
       { provide: MSAL_INTERCEPTOR_CONFIG, useFactory: MSALInterceptorConfigFactory },
-      /**
-       * MsalInterceptor NO se registra a proposito.
-       *
-       * Solo pide el token cuando MsalBroadcastService reporta
-       * InteractionStatus.None, y ese estado se pierde si el ciclo de vida de
-       * MSAL arranca desde un app initializer: se queda en Startup y el
-       * interceptor deja pasar todas las peticiones sin cabecera Authorization,
-       * con el backend devolviendo 401 sobre un token que en realidad es valido.
-       *
-       * En su lugar, authInterceptor (core/auth.interceptor.ts) pide el token con
-       * acquireTokenSilent y lo adjunta, sin depender de ningun estado global.
-       * MSAL_INTERCEPTOR_CONFIG se conserva porque documenta el mapa
-       * URL -> scopes que describe la guia 1.3.2.
-       */
+      // Guia 1.3.2: MsalInterceptor adjunta el token automaticamente a las URLs
+      // del protectedResourceMap y lo renueva en silencio cuando expira. Se
+      // registra por DI porque es una clase, no una funcion; de ahi el
+      // withInterceptorsFromDi() de mas abajo.
+      { provide: HTTP_INTERCEPTORS, useClass: MsalInterceptor, multi: true },
       MsalService,
       MsalGuard,
       MsalBroadcastService,
@@ -63,7 +55,7 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes, withComponentInputBinding()),
-    provideHttpClient(withInterceptors([authInterceptor])),
+    provideHttpClient(withInterceptors([authInterceptor]), withInterceptorsFromDi()),
     ...msalProviders,
     // Resuelve la sesion ANTES de mostrar la primera pantalla: sin esto se veria
     // un parpadeo de "no autenticado" en cada F5.

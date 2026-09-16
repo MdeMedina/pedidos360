@@ -519,6 +519,7 @@ API Gateway → **Crear API** → **HTTP API** → *Compilar*
 | Método | Ruta | Authorizer | Integración |
 |---|---|---|---|
 | `ANY` | `/api/{proxy+}` | `entra-id-authorizer` | `http://<F>:8080/{proxy}` (la de 4.2) |
+| `OPTIONS` | `/api/{proxy+}` | *(ninguno)* | `http://<F>:8080/{proxy}` (la misma) |
 | `GET` | `/actuator/health` | *(ninguno)* | `http://<F>:8080/actuator/health` (**nueva**) |
 
 Para cada una: selecciónala → **Adjuntar autorización**, luego → **Adjuntar integración**.
@@ -534,6 +535,18 @@ Para cada una: selecciónala → **Adjuntar autorización**, luego → **Adjunta
 > El `{proxy}` de la integración se rellena con lo que captura la ruta, y
 > `/actuator/health` es una ruta fija sin variables: no hay nada con qué rellenarlo.
 > La segunda integración lleva la URL completa escrita a mano, sin `{proxy}`.
+
+> ⚠️ **Hace falta una tercera ruta: `OPTIONS /api/{proxy+}` SIN authorizer.**
+>
+> `ANY` incluye `OPTIONS`, así que el preflight del navegador cae en la ruta protegida.
+> Y el navegador **nunca manda el token en un preflight**: recibe 401 y cancela la
+> petición real. Configurar CORS no basta — las cabeceras llegan correctas pero el
+> status sigue siendo 401, y el navegador exige 2xx.
+>
+> La ruta explícita `OPTIONS /api/{proxy+}` gana sobre `ANY` por ser más específica.
+> Se le adjunta la misma integración de `{proxy}` y **ninguna autorización**. No abre
+> ningún agujero: un OPTIONS no devuelve datos, solo anuncia métodos y cabeceras
+> permitidas. El backend ya lo contempla con `requestMatchers(OPTIONS, "/**").permitAll()`.
 
 > **Nunca publiques `/dev/{proxy+}`.** Es el emisor de tokens de demo. Con
 > `SPRING_PROFILES_ACTIVE=azure` el controlador ni siquiera se registra, pero no lo
@@ -719,6 +732,18 @@ no existe (fase 4.1): sin etapa las rutas están definidas pero no desplegadas.
 
 Estás atando la integración que lleva `{proxy}` a una ruta sin `{proxy+}`, típicamente
 `/actuator/health`. Esa ruta necesita su propia integración con la URL completa (fase 4.4).
+
+## El preflight OPTIONS devuelve 401 aunque CORS esté configurado
+
+Falta la ruta `OPTIONS /api/{proxy+}` sin authorizer (fase 4.4). Se distingue así:
+
+```bash
+curl -s -D - -o /dev/null -X OPTIONS "<I>/api/orders" \
+  -H "Origin: http://localhost:4200" \
+  -H "Access-Control-Request-Method: GET" | grep -iE "^HTTP|access-control"
+```
+
+Si las cabeceras `access-control-*` aparecen pero el status es 401, es exactamente este caso.
 
 ## `curl` funciona pero el navegador da error de CORS
 

@@ -13,14 +13,17 @@ spring:
     password: ${RABBITMQ_PASSWORD:pedidos360}
     listener:
       simple:
-        acknowledge-mode: auto
-        # Reintento con backoff antes de rendirse y mandar a la DLQ.
-        retry:
-          enabled: true
-          initial-interval: 2s
-          max-attempts: 3
-          multiplier: 2
-        default-requeue-rejected: false
+        # MANUAL: cada consumidor decide explicitamente entre ack, reintento y
+        # DLQ segun la naturaleza del error (guia 2.2.1). Con AUTO el broker da
+        # el mensaje por entregado al escribirlo en el socket y se perderia si
+        # el consumidor muere procesandolo.
+        acknowledge-mode: manual
+        # Un mensaje en vuelo por consumidor: hasta que no se confirma el
+        # anterior, el broker no entrega el siguiente. Evita que un consumidor
+        # lento acumule mensajes sin confirmar en memoria.
+        prefetch: 1
+        concurrency: 1
+        max-concurrency: 4
 
 pedidos360:
   security:

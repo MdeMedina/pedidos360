@@ -34,6 +34,7 @@ export class App {
     { path: '/catalog', label: 'Catálogo', icon: '📦', roles: ['ADMIN', 'OPERATOR'] },
     { path: '/reports', label: 'Reportería', icon: '📈', roles: ['ADMIN'] },
     { path: '/audit', label: 'Auditoría', icon: '🔍', roles: ['ADMIN', 'AUDITOR'] },
+    { path: '/admin-colas', label: 'Colas', icon: '🐇', roles: ['ADMIN'] },
   ];
 
   readonly navItems = computed(() =>

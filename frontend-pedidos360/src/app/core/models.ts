@@ -133,3 +133,39 @@ export interface ApiError {
   message: string;
   detail?: string;
 }
+
+// ---- administración de RabbitMQ (EP3) ----
+
+export interface QueueInfo {
+  name: string;
+  messageCount: number;
+  consumerCount: number;
+}
+
+export interface CreateQueueRequest {
+  name: string;
+  durable?: boolean;
+  exclusive?: boolean;
+  autoDelete?: boolean;
+  arguments?: Record<string, unknown>;
+}
+
+export interface CreateExchangeRequest {
+  name: string;
+  type: 'direct' | 'topic' | 'fanout' | 'headers';
+  durable?: boolean;
+  autoDelete?: boolean;
+}
+
+export interface BindingRequest {
+  queue: string;
+  exchange: string;
+  routingKey?: string;
+}
+
+export interface OperationResponse {
+  resource: string;
+  name: string;
+  operation: string;
+  detail: string;
+}

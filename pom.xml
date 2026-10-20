@@ -32,6 +32,7 @@
     <module>ms-pedidos360-notify</module>
     <module>ms-pedidos360-report</module>
     <module>ms-pedidos360-audit</module>
+    <module>ms-pedidos360-rabbitadmin</module>
     <module>ms-pedidos360-bff</module>
   </modules>
 

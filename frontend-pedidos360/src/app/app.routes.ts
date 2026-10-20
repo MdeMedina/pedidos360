@@ -53,6 +53,12 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/audit/audit').then((m) => m.AuditPage),
   },
   {
+    path: 'admin-colas',
+    canActivate: [roleGuard('ADMIN')],
+    loadComponent: () =>
+      import('./pages/rabbitadmin/rabbitadmin').then((m) => m.RabbitAdminPage),
+  },
+  {
     path: 'forbidden',
     loadComponent: () => import('./pages/forbidden/forbidden').then((m) => m.ForbiddenPage),
   },

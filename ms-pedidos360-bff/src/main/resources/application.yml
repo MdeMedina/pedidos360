@@ -40,6 +40,7 @@ pedidos360:
       notify: ${NOTIFY_URL:http://localhost:8083}
       report: ${REPORT_URL:http://localhost:8084}
       audit: ${AUDIT_URL:http://localhost:8085}
+      rabbitadmin: ${RABBITADMIN_URL:http://localhost:8086}
 
 management:
   # El indicador de salud de RabbitMQ intenta abrir una conexion real. Sin broker

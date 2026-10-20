@@ -1,0 +1,199 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>Administración de colas</h1>
+      <p class="muted">
+        Estado real del broker y gestión de la topología. Las operaciones las ejecuta
+        <code>ms-pedidos360-rabbitadmin</code> con <code>RabbitAdmin</code> de Spring AMQP.
+      </p>
+    </div>
+    <button class="ghost" (click)="load()" [disabled]="loading()">Actualizar</button>
+  </div>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+  @if (info()) {
+    <div class="alert alert-ok">{{ info() }}</div>
+  }
+  @if (mensajesEnDlq() > 0) {
+    <div class="alert alert-error">
+      Hay {{ mensajesEnDlq() }} mensaje(s) en las DLQ. Son comandos que ningún consumidor pudo
+      procesar: revísalos antes de purgarlos.
+    </div>
+  }
+  @if (sinConsumidor().length) {
+    <div class="alert alert-info">
+      {{ sinConsumidor().length }} cola(s) sin consumidor activo. Los mensajes se acumularán
+      hasta que <code>ms-pedidos360-notify</code> esté arriba.
+    </div>
+  }
+
+  <div class="grid grid-4">
+    <div class="card kpi">
+      <span class="kpi-label">Colas</span>
+      <span class="kpi-value">{{ queues().length }}</span>
+      <span class="faint">Topología del Caso 0</span>
+    </div>
+    <div class="card kpi">
+      <span class="kpi-label">Mensajes en espera</span>
+      <span class="kpi-value">{{ totalMensajes() }}</span>
+      <span class="faint">Sin confirmar por un consumidor</span>
+    </div>
+    <div class="card kpi">
+      <span class="kpi-label">En DLQ</span>
+      <span class="kpi-value">{{ mensajesEnDlq() }}</span>
+      <span class="faint">Tras agotar reintentos</span>
+    </div>
+    <div class="card kpi">
+      <span class="kpi-label">Sin consumidor</span>
+      <span class="kpi-value">{{ sinConsumidor().length }}</span>
+      <span class="faint">Colas desatendidas</span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 1rem">
+    <div class="card-head">
+      <h2>Colas</h2>
+      <span class="faint">Las de la topología base no se pueden eliminar</span>
+    </div>
+
+    @if (loading()) {
+      <p class="muted"><span class="spinner"></span> Consultando el broker…</p>
+    } @else if (queues().length === 0) {
+      <div class="empty">
+        Sin colas. ¿Está RabbitMQ levantado y <code>PEDIDOS360_RABBIT_ENABLED=true</code>?
+      </div>
+    } @else {
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Cola</th>
+              <th class="right">Mensajes</th>
+              <th class="right">Consumidores</th>
+              <th>Tipo</th>
+              <th class="right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (q of queues(); track q.name) {
+              <tr>
+                <td class="mono">{{ q.name }}</td>
+                <td class="right">
+                  <span class="badge" [class.badge-CANCELLED]="q.messageCount > 0 && esDlq(q.name)"
+                        [class.badge-PREPARING]="q.messageCount > 0 && !esDlq(q.name)"
+                        [class.badge-DELIVERED]="q.messageCount === 0">
+                    {{ q.messageCount }}
+                  </span>
+                </td>
+                <td class="right">
+                  <span class="badge" [class.badge-DELIVERED]="q.consumerCount > 0"
+                        [class.badge-CANCELLED]="q.consumerCount === 0">
+                    {{ q.consumerCount }}
+                  </span>
+                </td>
+                <td>
+                  @if (esDlq(q.name)) {
+                    <span class="badge badge-CANCELLED">DLQ</span>
+                  } @else {
+                    <span class="badge badge-ACCEPTED">Comandos</span>
+                  }
+                </td>
+                <td class="right">
+                  <div class="btn-row" style="justify-content: flex-end">
+                    <button class="sm" (click)="purgar(q.name)"
+                            [disabled]="busy() || q.messageCount === 0">Purgar</button>
+                    <button class="danger sm" (click)="eliminarCola(q.name)"
+                            [disabled]="busy() || esProtegida(q.name)"
+                            [title]="esProtegida(q.name) ? 'Pertenece a la topología base' : ''">
+                      Eliminar
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  <div class="grid grid-3" style="margin-top: 1rem">
+    <div class="card">
+      <div class="card-head"><h2>Nueva cola</h2></div>
+      <div class="field">
+        <label for="qname">Nombre</label>
+        <input id="qname" [value]="queueForm().name" placeholder="q.cmd.sms"
+               (input)="patchQueue('name', $any($event.target).value)" />
+      </div>
+      <div class="field">
+        <label for="qdur">Durabilidad</label>
+        <select id="qdur" [value]="queueForm().durable ? 'true' : 'false'"
+                (change)="patchQueue('durable', $any($event.target).value === 'true')">
+          <option value="true">Durable — sobrevive al reinicio</option>
+          <option value="false">Transitoria — vive en memoria</option>
+        </select>
+      </div>
+      <button class="primary" (click)="crearCola()" [disabled]="busy() || !queueForm().name">
+        Crear cola
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Nuevo exchange</h2></div>
+      <div class="field">
+        <label for="ename">Nombre</label>
+        <input id="ename" [value]="exchangeForm().name" placeholder="cmd.sms.direct"
+               (input)="patchExchange('name', $any($event.target).value)" />
+      </div>
+      <div class="field">
+        <label for="etype">Tipo</label>
+        <select id="etype" [value]="exchangeForm().type"
+                (change)="patchExchange('type', $any($event.target).value)">
+          @for (t of exchangeTypes; track t) {
+            <option [value]="t">{{ t }}</option>
+          }
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="primary" (click)="crearExchange()"
+                [disabled]="busy() || !exchangeForm().name">Crear exchange</button>
+        <button class="danger" (click)="eliminarExchange(exchangeForm().name)"
+                [disabled]="busy() || !exchangeForm().name">Eliminar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Nuevo binding</h2></div>
+      <div class="field">
+        <label for="bq">Cola</label>
+        <input id="bq" [value]="bindingForm().queue" placeholder="q.cmd.sms"
+               (input)="patchBinding('queue', $any($event.target).value)" />
+      </div>
+      <div class="field">
+        <label for="be">Exchange</label>
+        <input id="be" [value]="bindingForm().exchange" placeholder="cmd.direct"
+               (input)="patchBinding('exchange', $any($event.target).value)" />
+      </div>
+      <div class="field">
+        <label for="brk">Routing key</label>
+        <input id="brk" [value]="bindingForm().routingKey ?? ''" placeholder="sms.send"
+               (input)="patchBinding('routingKey', $any($event.target).value)" />
+      </div>
+      <button class="primary" (click)="crearBinding()"
+              [disabled]="busy() || !bindingForm().queue || !bindingForm().exchange">
+        Crear binding
+      </button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 1rem">
+    <p class="faint" style="margin: 0">
+      Los nombres admiten letras, números y los caracteres <code>. _ - :</code>. La validación
+      la hacen los DTO del backend, así que un nombre vacío o con espacios devuelve 400 con el
+      motivo exacto. Las colas y exchanges de la topología del Caso 0 están protegidos contra
+      borrado: eliminarlos dejaría sin notificaciones a todos los clientes.
+    </p>
+  </div>
+</div>

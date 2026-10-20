@@ -5,14 +5,19 @@ import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
   AuditEvent,
+  BindingRequest,
+  CreateExchangeRequest,
+  CreateQueueRequest,
   CreateOrderRequest,
   DashboardSummary,
   Kpis,
   LeadTimeReport,
+  OperationResponse,
   Order,
   OrderStatus,
   Product,
   ProductRequest,
+  QueueInfo,
   SalesByHour,
   TopProduct,
 } from './models';
@@ -120,5 +125,44 @@ export class ApiService {
 
   auditTimeline(orderId: string): Observable<AuditEvent[]> {
     return this.http.get<AuditEvent[]>(`${this.base}/api/audit/orders/${orderId}/timeline`);
+  }
+
+  // ---- administración de RabbitMQ ----
+
+  rabbitQueues(): Observable<QueueInfo[]> {
+    return this.http.get<QueueInfo[]>(`${this.base}/api/rabbitadmin/queues`);
+  }
+
+  rabbitQueue(name: string): Observable<QueueInfo> {
+    return this.http.get<QueueInfo>(`${this.base}/api/rabbitadmin/queues/${name}`);
+  }
+
+  createQueue(body: CreateQueueRequest): Observable<QueueInfo> {
+    return this.http.post<QueueInfo>(`${this.base}/api/rabbitadmin/queues`, body);
+  }
+
+  deleteQueue(name: string): Observable<OperationResponse> {
+    return this.http.delete<OperationResponse>(`${this.base}/api/rabbitadmin/queues/${name}`);
+  }
+
+  purgeQueue(name: string): Observable<OperationResponse> {
+    return this.http.post<OperationResponse>(`${this.base}/api/rabbitadmin/queues/${name}/purge`, {});
+  }
+
+  createExchange(body: CreateExchangeRequest): Observable<OperationResponse> {
+    return this.http.post<OperationResponse>(`${this.base}/api/rabbitadmin/exchanges`, body);
+  }
+
+  deleteExchange(name: string): Observable<OperationResponse> {
+    return this.http.delete<OperationResponse>(`${this.base}/api/rabbitadmin/exchanges/${name}`);
+  }
+
+  createBinding(body: BindingRequest): Observable<OperationResponse> {
+    return this.http.post<OperationResponse>(`${this.base}/api/rabbitadmin/bindings`, body);
+  }
+
+  /** DELETE con cuerpo: un binding se identifica por cola + exchange + routing key. */
+  deleteBinding(body: BindingRequest): Observable<OperationResponse> {
+    return this.http.delete<OperationResponse>(`${this.base}/api/rabbitadmin/bindings`, { body });
   }
 }

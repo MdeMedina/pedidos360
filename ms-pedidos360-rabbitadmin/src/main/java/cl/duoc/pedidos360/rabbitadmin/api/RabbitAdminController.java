@@ -57,9 +57,9 @@ public class RabbitAdminController {
     // ---------------------------------------------------------------- colas
 
     @GetMapping("/queues")
-    @Operation(summary = "Estado de las colas de la topologia del Caso 0")
+    @Operation(summary = "Estado de la topologia base mas las colas creadas por esta API")
     public List<QueueInfoResponse> listarColas() {
-        return service.listarColasDelCaso();
+        return service.listarColas();
     }
 
     @GetMapping("/queues/{name}")

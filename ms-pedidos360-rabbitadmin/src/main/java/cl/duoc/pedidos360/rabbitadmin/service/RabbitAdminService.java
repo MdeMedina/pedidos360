@@ -2,6 +2,10 @@ package cl.duoc.pedidos360.rabbitadmin.service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 import cl.duoc.pedidos360.common.events.Messaging;
 import cl.duoc.pedidos360.common.web.BusinessException;
@@ -53,6 +57,22 @@ public class RabbitAdminService {
     private static final List<String> EXCHANGES_PROTEGIDOS = List.of(
             Messaging.EXCHANGE_DIRECT, Messaging.EXCHANGE_TOPIC, Messaging.EXCHANGE_DLX);
 
+    /**
+     * Colas declaradas a traves de esta API.
+     *
+     * AMQP no tiene ninguna operacion para enumerar las colas de un broker: el
+     * protocolo solo permite declarar, consultar una concreta y eliminar. Por
+     * eso RabbitMQ ofrece la Management HTTP API aparte, y por eso RabbitAdmin
+     * —que habla AMQP puro— no puede listar.
+     *
+     * Este registro permite que la pantalla de administracion muestre lo que se
+     * acaba de crear, en vez de dejar al usuario sin confirmacion visual. Es de
+     * ambito de proceso: al reiniciar el microservicio se pierde la lista, pero
+     * NO las colas, que siguen existiendo en el broker y se pueden consultar
+     * una a una por nombre.
+     */
+    private final Set<String> declaradas = ConcurrentHashMap.newKeySet();
+
     private final RabbitAdmin rabbitAdmin;
 
     public RabbitAdminService(RabbitAdmin rabbitAdmin) {
@@ -79,6 +99,7 @@ public class RabbitAdminService {
 
         Queue queue = builder.build();
         ejecutar("cola", request.name(), () -> rabbitAdmin.declareQueue(queue));
+        declaradas.add(request.name());
         log.info("Cola declarada: {} (durable={})", request.name(), request.durableOrDefault());
         return consultarCola(request.name());
     }
@@ -91,11 +112,17 @@ public class RabbitAdminService {
         return new QueueInfoResponse(info.getName(), info.getMessageCount(), info.getConsumerCount());
     }
 
-    /** Estado de la topologia del Caso 0, para la pantalla de administracion. */
-    public List<QueueInfoResponse> listarColasDelCaso() {
-        return COLAS_PROTEGIDAS.stream()
+    /**
+     * Estado de las colas visibles: la topologia fija del Caso 0 mas las que se
+     * hayan declarado por la API en este proceso. Las que ya no existen en el
+     * broker se descartan, de modo que una cola borrada desde la consola de
+     * RabbitMQ desaparece tambien de aqui.
+     */
+    public List<QueueInfoResponse> listarColas() {
+        return Stream.concat(COLAS_PROTEGIDAS.stream(), declaradas.stream())
+                .distinct()
                 .map(rabbitAdmin::getQueueInfo)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .map(i -> new QueueInfoResponse(i.getName(), i.getMessageCount(), i.getConsumerCount()))
                 .toList();
     }
@@ -106,6 +133,7 @@ public class RabbitAdminService {
             throw BusinessException.notFound("Cola", nombre);
         }
         ejecutar("cola", nombre, () -> rabbitAdmin.deleteQueue(nombre));
+        declaradas.remove(nombre);
         log.info("Cola eliminada: {}", nombre);
     }
 

@@ -13,7 +13,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="$ROOT/dist-ec2"
-SERVICES=(bff orders catalog notify report audit)
+SERVICES=(bff orders catalog notify report audit rabbitadmin)
 
 echo "==> Compilando los jars"
 (cd "$ROOT" && mvn -q clean package -DskipTests)

@@ -4,12 +4,17 @@ Tres archivos compose, uno por VM, tal como propone el Caso 0:
 
 | Archivo | VM del enunciado | Contiene |
 |---|---|---|
-| `apps/compose.yml` | `ec2-apps` | bff, orders, catalog, notify, report, audit y el frontend |
+| `apps/compose.yml` | `ec2-apps` | bff, orders, catalog, notify, report, audit, rabbitadmin y el frontend |
 | `mq/compose.yml` | `ec2-mq` | RabbitMQ + consola de administración |
 | `kafka/compose.yml` | `ec2-kafka` | ZooKeeper + Kafka (1 broker) + Kafka UI |
 
 Están separados a propósito: en AWS cada uno vive en una instancia distinta, con
 su propio Security Group. En local se conectan entre sí por una red Docker común.
+
+`apps/compose.prebuilt.yml` es la variante de despliegue: no compila con Maven
+dentro de la instancia —en una `t3.small` el compilador se queda sin memoria—
+sino que empaqueta los jars construidos en tu máquina con
+`scripts/package-for-ec2.sh`.
 
 ## Levantar todo en local
 
@@ -28,6 +33,8 @@ docker compose -f infra/apps/compose.yml --env-file infra/apps/.env up -d --buil
 | Frontend | http://localhost:4200 |
 | BFF (API) | http://localhost:8080 |
 | Swagger de orders | http://localhost:8081/swagger-ui.html |
+| Swagger de rabbitadmin | http://localhost:8086/swagger-ui.html |
+| Administración de colas | http://localhost:4200/admin-colas (rol Admin) |
 | RabbitMQ | http://localhost:15672 (`pedidos360` / `pedidos360`) |
 | Kafka UI | http://localhost:8090 |
 

@@ -124,6 +124,26 @@ services:
     networks: [pedidos360-net]
     restart: unless-stopped
 
+  # ---------------- administrador de RabbitMQ (EP3) ----------------
+  # Sin "ports": solo alcanzable desde la red interna de Docker. Administrar la
+  # mensajeria no debe quedar expuesto, ni siquiera detras del gateway, donde ya
+  # exige rol Admin.
+  rabbitadmin-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: ms-pedidos360-rabbitadmin
+    container_name: pedidos360-rabbitadmin
+    environment:
+      <<: *common-env
+      PEDIDOS360_RABBIT_ENABLED: "true"
+    expose:
+      - "8080"
+    healthcheck: *healthcheck
+    networks: [pedidos360-net]
+    restart: unless-stopped
+
   # ---------------- BFF: unica puerta hacia el frontend ----------------
   bff-svc:
     build:
@@ -139,10 +159,13 @@ services:
       NOTIFY_URL: http://pedidos360-notify:8080
       REPORT_URL: http://pedidos360-report:8080
       AUDIT_URL: http://pedidos360-audit:8080
+      RABBITADMIN_URL: http://pedidos360-rabbitadmin:8080
     depends_on:
       orders-svc:
         condition: service_healthy
       catalog-svc:
+        condition: service_healthy
+      rabbitadmin-svc:
         condition: service_healthy
     ports:
       # Es el UNICO puerto que debe quedar abierto en el Security Group hacia

@@ -14,7 +14,7 @@ LOG_DIR="$ROOT/.logs"
 PID_FILE="$ROOT/.logs/pids"
 mkdir -p "$LOG_DIR"
 
-SERVICES=(catalog orders notify report audit bff)
+SERVICES=(catalog orders notify report audit rabbitadmin bff)
 
 echo "==> Compilando (mvn install -DskipTests)"
 (cd "$ROOT" && mvn -q install -DskipTests)
@@ -28,7 +28,7 @@ for svc in "${SERVICES[@]}"; do
 done
 
 echo "==> Esperando a que todos respondan UP"
-ports=(8082 8081 8083 8084 8085 8080)
+ports=(8082 8081 8083 8084 8085 8086 8080)
 for i in {1..60}; do
   up=0
   for p in "${ports[@]}"; do
@@ -47,6 +47,7 @@ Servicios arriba ($up/${#ports[@]}):
   notify   http://localhost:8083
   report   http://localhost:8084/swagger-ui.html
   audit    http://localhost:8085/swagger-ui.html
+  rabbitadmin http://localhost:8086/swagger-ui.html   (necesita RabbitMQ levantado)
 
 Token de demo:
   curl "http://localhost:8080/dev/token?username=admin@pedidos360.cl&roles=ADMIN"

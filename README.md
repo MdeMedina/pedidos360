@@ -9,6 +9,7 @@ Docker Compose listo para EC2.
 | Documento | Para qué |
 |---|---|
 | **[docs/00-PASO-A-PASO.md](docs/00-PASO-A-PASO.md)** | **La guía de estudio.** Cada paso de las guías del ramo, en orden, con el porqué y las preguntas de defensa |
+| **[docs/05-AWS-DESDE-CERO.md](docs/05-AWS-DESDE-CERO.md)** | **Rehacer solo AWS** en un laboratorio nuevo, con los valores de Azure ya puestos y los errores conocidos corregidos |
 | **[docs/04-DEPLOY-RUNBOOK.md](docs/04-DEPLOY-RUNBOOK.md)** | **El runbook de despliegue.** Comandos exactos, en orden, de local → Azure → EC2 → API Gateway, con checkpoints |
 | [docs/01-azure-entra-id.md](docs/01-azure-entra-id.md) | Configurar el tenant, los dos App Registrations, scopes y roles |
 | [docs/02-aws-api-gateway.md](docs/02-aws-api-gateway.md) | Crear la HTTP API, el JWT Authorizer y el versionado `/v1` `/v2` |

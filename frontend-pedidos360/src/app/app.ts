@@ -1,5 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter, map } from 'rxjs';
 
 import { AuthService } from './core/auth.service';
 import { Role } from './core/models';
@@ -41,7 +43,37 @@ export class App {
     this.allItems.filter((item) => this.auth.hasRole(...item.roles)),
   );
 
-  readonly showShell = computed(() => this.auth.isAuthenticated());
+  /**
+   * Rutas que se dibujan a pantalla completa, sin el layout de la aplicacion.
+   * Son las del flujo de autenticacion: mostrar el menu lateral junto a la
+   * pantalla de login no tiene sentido y confunde, porque sugiere que hay
+   * sesion cuando lo que se esta pidiendo es iniciarla.
+   */
+  private static readonly RUTAS_SIN_SHELL = ['/login', '/auth/callback'];
+
+  /** URL actual como signal, para que showShell reaccione a la navegacion. */
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+      map((e) => e.urlAfterRedirects),
+    ),
+    { initialValue: this.router.url },
+  );
+
+  /**
+   * El shell necesita DOS condiciones, no una.
+   *
+   * Con solo isAuthenticated(), estar logueado y tener el router en /login
+   * dibujaba el menu lateral alrededor de la tarjeta de inicio de sesion.
+   * Pasa siempre que se llega a una ruta de autenticacion con la sesion ya
+   * resuelta: al volver de Entra ID por /auth/callback, o al navegar a /login
+   * a mano.
+   */
+  readonly showShell = computed(() => {
+    const ruta = this.url().split('?')[0];
+    const esRutaDeAuth = App.RUTAS_SIN_SHELL.some((r) => ruta.startsWith(r));
+    return this.auth.isAuthenticated() && !esRutaDeAuth;
+  });
 
   logout(): void {
     this.auth.logout();

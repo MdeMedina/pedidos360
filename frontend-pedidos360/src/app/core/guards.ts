@@ -70,3 +70,16 @@ export function roleGuard(...allowed: Role[]): CanActivateFn {
     });
   };
 }
+
+/**
+ * Lo contrario de authGuard: impide entrar a /login con la sesion ya abierta.
+ *
+ * Sin esto se puede navegar a /login estando autenticado, lo que deja una
+ * pantalla contradictoria —pide iniciar sesion a alguien que ya la tiene— y
+ * ofrece un boton que relanzaria el flujo de MSAL sin necesidad.
+ */
+export const soloInvitadosGuard: CanActivateFn = (): GuardResult => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  return auth.isAuthenticated() ? router.createUrlTree(['/dashboard']) : true;
+};

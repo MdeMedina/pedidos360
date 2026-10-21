@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 
-import { authGuard, roleGuard } from './core/guards';
+import { authGuard, roleGuard, soloInvitadosGuard } from './core/guards';
 
 /**
  * Mapa de rutas del Caso 0 con su control de acceso.
@@ -19,6 +19,7 @@ export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
   {
     path: 'login',
+    canActivate: [soloInvitadosGuard],
     loadComponent: () => import('./pages/login/login').then((m) => m.LoginPage),
   },
   {

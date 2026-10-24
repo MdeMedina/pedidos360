@@ -487,8 +487,35 @@ pegadas: `publishEvent()` a Kafka, `publishCommand()` a Rabbit.
 Las colas están replicadas (`ha-mode: all`): cada una tiene master en un nodo y
 espejo en el otro. Si cae el master, el espejo se promueve. Los microservicios
 conocen los dos nodos vía `spring.rabbitmq.addresses` y reconectan solos.
-Demuéstralo: `docker stop pedidos360-rabbit1`, y desde `rabbit2` las colas
-siguen ahí.
+
+**Demuéstralo en vivo** — está medido, tarda menos de un minuto entero:
+
+```bash
+# Terminal con SSH a ec2-mq
+docker stop pedidos360-rabbit1
+docker exec pedidos360-rabbit2 rabbitmqctl cluster_status   # Running: solo rabbit2
+docker exec pedidos360-rabbit2 rabbitmqctl list_queues name consumers
+```
+
+A los **~16 s** los 6 consumidores aparecen reconectados sobre `rabbit2`. Con el
+nodo todavía caído, publica un mensaje desde la consola de `rabbit2`
+(http://34.229.10.208:15673) y en los logs de `notify` sale
+`[COCINA] ticket para el pedido ...`: **la aplicación sigue procesando con la
+mitad del clúster muerto**. Eso es lo que hay que hacer notar, no que el clúster
+sobreviva en abstracto.
+
+```bash
+docker start pedidos360-rabbit1    # ~15 s en reincorporarse
+```
+
+Fíjate en que `rabbit1` **nunca dejó de aparecer en Disc Nodes**: por eso al
+volver se reincorpora solo, sin ningún `join_cluster`. Y `Network Partitions`
+sigue en `(none)`.
+
+Si pregunta por qué tarda 16 s y no es instantáneo: el cliente tiene que
+detectar la conexión caída, agotar el intento contra el nodo muerto y
+reconectar. Por eso `connection-timeout: 5s` en el `application.yml` — con el
+valor por defecto de 60 s el failover tardaba más de un minuto.
 
 **¿Cómo evitas procesar dos veces el mismo mensaje?**
 Idempotencia por `eventId`. Cada listener llama primero a

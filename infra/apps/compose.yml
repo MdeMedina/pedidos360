@@ -18,8 +18,9 @@ x-common-env: &common-env
   PEDIDOS360_ISSUER_URI: ${PEDIDOS360_ISSUER_URI:-https://login.microsoftonline.com/TENANT_ID/v2.0}
   PEDIDOS360_DEV_SECRET: ${PEDIDOS360_DEV_SECRET:-pedidos360-dev-secret-cambia-esto-en-produccion-1234567890}
   PEDIDOS360_DEV_ISSUER: ${PEDIDOS360_DEV_ISSUER:-http://localhost/dev-issuer}
-  RABBITMQ_HOST: pedidos360-rabbitmq
-  RABBITMQ_PORT: "5672"
+  # Los dos nodos del cluster (infra/mq/compose.yml). En EC2 se sobreescribe
+  # desde .env con la IP privada de ec2-mq y sus puertos 5672 y 5673.
+  RABBITMQ_ADDRESSES: ${RABBITMQ_ADDRESSES:-rabbit1:5672,rabbit2:5672}
   RABBITMQ_USER: ${RABBITMQ_USER:-pedidos360}
   RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-pedidos360}
   KAFKA_BOOTSTRAP: pedidos360-kafka:29092

@@ -1,41 +1,89 @@
 # ============================================================================
 # infra/mq/compose.yml  ->  VM ec2-mq del Caso 0
 #
-#   docker network create pedidos360-net   (una sola vez)
-#   docker compose -f infra/mq/compose.yml up -d
+# CLUSTER RabbitMQ de DOS nodos (guia 2.3.1).
 #
-# UI de administracion: http://localhost:15672  (pedidos360 / pedidos360)
+#   docker network create pedidos360-net          (una sola vez)
+#   docker compose -f infra/mq/compose.yml up -d
+#   docker exec pedidos360-rabbit1 rabbitmqctl cluster_status
+#
+# Management UI:  rabbit1 -> http://<host>:15672    (pedidos360 / pedidos360)
+#                 rabbit2 -> http://<host>:15673
+#
+# ---------------------------------------------------------------------------
+# QUE DEBE SER IGUAL Y QUE DISTINTO ENTRE LOS DOS NODOS
+#
+#   IGUAL     RABBITMQ_ERLANG_COOKIE  secreto compartido; sin el, los nodos no
+#                                     se reconocen y el cluster nunca se forma
+#             imagen y version        nodos de versiones distintas no agrupan
+#             usuario y clave         el cluster comparte usuarios y permisos
+#             rabbitmq.conf           misma lista de miembros en los dos
+#
+#   DISTINTO  hostname                define el nombre de nodo rabbit@<hostname>
+#             puertos publicados      comparten host: 5672/15672 y 5673/15673
+#             volumen de datos        cada nodo necesita su propia base Mnesia
 # ============================================================================
 name: pedidos360-mq
 
+# Lo que comparten los dos nodos, en un solo sitio para que no se desincronice.
+x-rabbit-comun: &rabbit-comun
+  image: rabbitmq:3.13-management-alpine
+  environment: &rabbit-env
+    RABBITMQ_DEFAULT_USER: pedidos360
+    RABBITMQ_DEFAULT_PASS: pedidos360
+    RABBITMQ_DEFAULT_VHOST: /
+    # El secreto compartido. Tiene que ser IDENTICO en los dos nodos: Erlang lo
+    # usa para autenticar la comunicacion entre ellos.
+    RABBITMQ_ERLANG_COOKIE: pedidos360-cluster-cookie
+  volumes:
+    - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    - ./definitions.json:/etc/rabbitmq/definitions.json:ro
+  healthcheck:
+    # Sin healthcheck, notify arrancaria antes que el broker y moriria
+    # reintentando la conexion.
+    test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+    interval: 10s
+    timeout: 5s
+    retries: 10
+    start_period: 40s
+  networks:
+    - pedidos360-net
+  restart: unless-stopped
+
 services:
-  rabbitmq:
-    image: rabbitmq:3.13-management-alpine
-    container_name: pedidos360-rabbitmq
-    hostname: pedidos360-rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: pedidos360
-      RABBITMQ_DEFAULT_PASS: pedidos360
-      RABBITMQ_DEFAULT_VHOST: /
+  rabbit1:
+    <<: *rabbit-comun
+    container_name: pedidos360-rabbit1
+    # El hostname define el nombre del nodo: rabbit@rabbit1.
+    hostname: rabbit1
     ports:
-      - "5672:5672"    # AMQP: lo usan orders (productor) y notify (consumidor)
-      - "15672:15672"  # consola web: colas, DLQ, tasa de mensajes
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # consola web
     volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
-    healthcheck:
-      # Sin healthcheck, notify arrancaria antes que el broker y moriria
-      # reintentando la conexion.
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    networks:
-      - pedidos360-net
-    restart: unless-stopped
+      - rabbit1-data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./definitions.json:/etc/rabbitmq/definitions.json:ro
+
+  rabbit2:
+    <<: *rabbit-comun
+    container_name: pedidos360-rabbit2
+    hostname: rabbit2
+    ports:
+      - "5673:5672"     # mismo puerto dentro, otro fuera: comparten host
+      - "15673:15672"
+    volumes:
+      - rabbit2-data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./definitions.json:/etc/rabbitmq/definitions.json:ro
+    depends_on:
+      # Arrancar a la vez provoca una carrera por quien forma el cluster. Que
+      # rabbit1 este sano primero hace el arranque reproducible.
+      rabbit1:
+        condition: service_healthy
 
 volumes:
-  rabbitmq-data:
+  rabbit1-data:
+  rabbit2-data:
 
 networks:
   pedidos360-net:

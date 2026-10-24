@@ -1,0 +1,72 @@
+{
+  "rabbit_version": "3.13.0",
+  "product_name": "RabbitMQ",
+
+  "users": [
+    {
+      "name": "pedidos360",
+      "password_hash": "kI3GCj0o5C4/VaPUxPfB6frgW5/40SFdXH2fL3wGNoFbFVwK",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": ["administrator"]
+    }
+  ],
+
+  "vhosts": [{ "name": "/" }],
+
+  "permissions": [
+    {
+      "user": "pedidos360",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+
+  "policies": [
+    {
+      "vhost": "/",
+      "name": "pedidos360-colas-negocio",
+      "pattern": "^q\\.cmd\\.(email|kitchen|invoice)$",
+      "apply-to": "queues",
+      "priority": 10,
+      "definition": {
+        "ha-mode": "all",
+        "ha-sync-mode": "automatic",
+        "max-length": 10000,
+        "message-ttl": 3600000,
+        "overflow": "reject-publish-dlx"
+      }
+    },
+    {
+      "vhost": "/",
+      "name": "pedidos360-colas-dlq",
+      "pattern": "^q\\.cmd\\..*\\.dlq$",
+      "apply-to": "queues",
+      "priority": 20,
+      "definition": {
+        "ha-mode": "all",
+        "ha-sync-mode": "automatic",
+        "max-length": 5000,
+        "message-ttl": 604800000
+      }
+    },
+    {
+      "vhost": "/",
+      "name": "pedidos360-colas-temporales",
+      "pattern": "^tmp\\.",
+      "apply-to": "queues",
+      "priority": 30,
+      "definition": {
+        "ha-mode": "all",
+        "expires": 1800000
+      }
+    }
+  ],
+
+  "parameters": [],
+  "global_parameters": [],
+  "queues": [],
+  "exchanges": [],
+  "bindings": []
+}

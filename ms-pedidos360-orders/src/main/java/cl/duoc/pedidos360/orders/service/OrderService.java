@@ -120,6 +120,7 @@ public class OrderService {
         Order saved = repository.save(order);
         publishStatusEvent(saved, target, actor, request.reason());
         publishNotification(saved, notificationMessage(target), actor);
+        publishWorkflowCommands(saved, target, actor);
         return saved;
     }
 
@@ -216,6 +217,49 @@ public class OrderService {
                 "channel", "email");
         publisher.publishCommand(Messaging.RK_EMAIL_SEND,
                 EventEnvelope.of("email.send", order.getId(), actor, payload));
+    }
+
+    /**
+     * Comandos de flujo de trabajo: los OTROS dos consumidores del Caso 0.
+     *
+     * Cada cola resuelve un caso de uso distinto del negocio y por eso se
+     * dispara en un momento distinto de la maquina de estados:
+     *
+     *   q.cmd.email    -> en TODA transicion. El cliente quiere saber siempre
+     *                     en que va su pedido.
+     *   q.cmd.kitchen  -> solo al ACEPTAR. Antes de aceptar no hay nada que
+     *                     cocinar, y la comanda no se reimprime en cada paso.
+     *   q.cmd.invoice  -> solo al ENTREGAR. La boleta se emite contra la
+     *                     entrega efectiva; emitirla antes seria facturar algo
+     *                     que todavia puede cancelarse.
+     *
+     * Van por el exchange direct con routing key exacta, igual que el correo:
+     * son ordenes con un destinatario conocido, no eventos para quien quiera
+     * escucharlos. Esos ultimos viajan por Kafka en publishStatusEvent.
+     */
+    private void publishWorkflowCommands(Order order, OrderStatus status, String actor) {
+        if (status == OrderStatus.ACCEPTED) {
+            publisher.publishCommand(Messaging.RK_KITCHEN_TICKET,
+                    EventEnvelope.of("kitchen.ticket", order.getId(), actor, Map.of(
+                            "orderId", order.getId(),
+                            "customer", order.getCustomer(),
+                            "lines", order.getItems().stream()
+                                    .map(i -> Map.<String, Object>of(
+                                            "sku", i.getSku(),
+                                            "name", i.getName(),
+                                            "quantity", i.getQuantity()))
+                                    .toList(),
+                            "station", "cocina-principal")));
+        } else if (status == OrderStatus.DELIVERED) {
+            publisher.publishCommand(Messaging.RK_INVOICE_GEN,
+                    EventEnvelope.of("invoice.gen", order.getId(), actor, Map.of(
+                            "orderId", order.getId(),
+                            "customer", order.getCustomer(),
+                            "total", order.getTotal(),
+                            "itemCount", order.getItems().stream()
+                                    .mapToInt(OrderItem::getQuantity).sum(),
+                            "documentType", "boleta")));
+        }
     }
 
     private String notificationMessage(OrderStatus status) {

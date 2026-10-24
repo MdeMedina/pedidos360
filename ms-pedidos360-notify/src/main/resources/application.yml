@@ -7,8 +7,18 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
   rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
+    # Los DOS nodos del cluster. Spring AMQP recorre la lista hasta conectar,
+    # asi que si rabbit1 se cae el servicio sigue publicando contra rabbit2 sin
+    # tocar configuracion. Con host/port solos esa tolerancia no existe.
+    addresses: ${RABBITMQ_ADDRESSES:${RABBITMQ_HOST:localhost}:5672,${RABBITMQ_HOST:localhost}:5673}
+    # Sin esto el failover tarda un minuto: el intento contra el nodo caido
+    # agota el timeout por defecto (60s) antes de probar el siguiente de la
+    # lista. En EC2 el security group descarta los paquetes en vez de
+    # rechazarlos, asi que no hay un "connection refused" rapido que corte.
+    connection-timeout: 5s
+    # Reparte las conexiones entre los dos nodos en vez de amontonarlas
+    # todas en el primero de la lista.
+    address-shuffle-mode: random
     username: ${RABBITMQ_USER:pedidos360}
     password: ${RABBITMQ_PASSWORD:pedidos360}
     listener:

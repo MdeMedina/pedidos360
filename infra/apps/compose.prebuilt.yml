@@ -20,8 +20,9 @@ x-common-env: &common-env
   # la respuesta viajaria con dos Access-Control-Allow-Origin y el navegador la
   # rechazaria con un error que no menciona la duplicacion.
   PEDIDOS360_CORS_ENABLED: "false"
-  RABBITMQ_HOST: ${RABBITMQ_HOST:-pedidos360-rabbitmq}
-  RABBITMQ_PORT: "5672"
+  # Los dos nodos del cluster (infra/mq/compose.yml). En EC2 se sobreescribe
+  # desde .env con la IP privada de ec2-mq y sus puertos 5672 y 5673.
+  RABBITMQ_ADDRESSES: ${RABBITMQ_ADDRESSES:-rabbit1:5672,rabbit2:5672}
   RABBITMQ_USER: ${RABBITMQ_USER:-pedidos360}
   RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-pedidos360}
   KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-pedidos360-kafka:29092}

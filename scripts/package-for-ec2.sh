@@ -31,6 +31,10 @@ cp "$ROOT/Dockerfile.runtime"              "$OUT/pedidos360/"
 cp "$ROOT/infra/apps/compose.prebuilt.yml" "$OUT/pedidos360/compose.yml"
 cp "$ROOT/infra/apps/.env.example"         "$OUT/pedidos360/.env.example"
 cp "$ROOT/infra/mq/compose.yml"            "$OUT/pedidos360/compose.mq.yml"
+# El cluster de dos nodos monta estos dos archivos; sin ellos rabbit1 arranca
+# como nodo suelto y no se forma el cluster.
+cp "$ROOT/infra/mq/rabbitmq.conf"          "$OUT/pedidos360/"
+cp "$ROOT/infra/mq/definitions.json"       "$OUT/pedidos360/"
 cp "$ROOT/infra/kafka/compose.yml"         "$OUT/pedidos360/compose.kafka.yml"
 
 tar -czf "$OUT/pedidos360-apps.tgz" -C "$OUT" pedidos360
